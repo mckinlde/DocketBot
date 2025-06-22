@@ -1,0 +1,38 @@
+# git config --global user.email "douglas.e.mckinley@gmail.com"
+# git config --global user.name "mckinlde"
+
+# Ignore Python cache and virtual environments
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+
+# Ignore build artifacts
+build/
+dist/
+*.spec
+
+# Ignore local dev files
+.spyproject/
+
+# Ignore Selenium or Chromium binaries
+chrome-win64/
+chromedriver-win64/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Ignore logs, temp files
+*.log
+*.tmp
+
+# Editor/project-specific
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Optional: config or secret files
+config.json

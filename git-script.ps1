@@ -25,6 +25,8 @@ Write-Host "Pushing changes to remote..."
 git push
 
 Write-Host "Rebuilding executable with PyInstaller..."
+Remove-Item -Recurse -Force .\build
+Remove-Item -Recurse -Force .\dist
 pyinstaller DocketBot.spec
 
 Write-Host "Done."

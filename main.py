@@ -56,7 +56,7 @@ def run_gui():
 
     root = tk.Tk()
     root.title("DocketBot")
-    root.geometry("850x680")
+    root.geometry("850x600")
     root.configure(padx=20, pady=20)
 
     # === Bar Number Display ===
@@ -98,7 +98,7 @@ def run_gui():
     tk.Button(dest_frame, text="Change", command=change_folder).pack(anchor="w", pady=2)
 
     # === Output Box ===
-    output_box = scrolledtext.ScrolledText(root, state='disabled', width=100, height=24, wrap='word')
+    output_box = scrolledtext.ScrolledText(root, state='disabled', width=100, height=12, wrap='word')  # Adjusted height
     output_box.pack(pady=15, fill="both", expand=True)
 
     sys.stdout = StdoutRedirector(output_box)
@@ -134,7 +134,7 @@ def run_gui():
     controls_frame = tk.Frame(root)
     controls_frame.pack(pady=10)
 
-    btn_run = tk.Button(controls_frame, text="Start", width=20, command=run_script)
+    btn_run = tk.Button(controls_frame, text="Start (Opens browser window)", width=20, command=run_script)
     btn_run.pack(side="left", padx=10)
 
     btn_continue = tk.Button(controls_frame, text="Continue (after captcha)", width=30, command=continue_scrape)

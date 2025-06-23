@@ -1,7 +1,3 @@
-Here’s a `README.md` tailored for your **DocketBot** project in its current state, with appropriate placeholders, usage instructions, and notes based on what you've shared so far:
-
----
-
 ````markdown
 # DocketBot
 

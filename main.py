@@ -14,15 +14,15 @@ def get_stored_license_key():
     except Exception:
         return ""
 
-def check_license():
+def check_license(bar_number, password):
     try:
-        license_key = get_stored_license_key()
-        # Simulated license check — replace with real server call if needed
-        if license_key != "20789":  # replace with your validation logic
-            raise Exception("License invalid or expired")
+        # TODO: Replace this dummy check with API request
+        if not (bar_number == "20789" and password):
+            raise Exception("Invalid login or expired license")
     except Exception as e:
         print("License check failed:", e)
         sys.exit(1)
+
 
 # === Utility for PyInstaller pathing ===
 def resource_path(relative_path):
@@ -48,17 +48,36 @@ class StdoutRedirector:
 # === Initial User Config ===
 def prompt_for_config(config):
     import tkinter.simpledialog as simpledialog
+    from tkinter import filedialog
 
     root = tk.Tk()
-    root.withdraw()  # hide main window
+    root.withdraw()
+
+    if not config.get("bar_number"):
+        bar_number = simpledialog.askstring("Login", "Enter your Docket ID (Bar Number):")
+        if bar_number:
+            config["bar_number"] = bar_number
+
+    if not config.get("password"):
+        password = simpledialog.askstring("Login", "Enter your password:", show='*')
+        if password:
+            config["password"] = password
+
+    remember = messagebox.askyesno("Remember Login?", "Save login credentials on this device?")
+    config["remember_credentials"] = remember
+    if not remember:
+        config.pop("bar_number", None)
+        config.pop("password", None)
 
     if not config.get("base_path"):
-        base_path = simpledialog.askstring("Setup", "Enter base path for your Cases folder:")
+        messagebox.showinfo("Base Path", "Please choose your case folder root directory...")
+        base_path = filedialog.askdirectory(title="Select base path for your Cases")
         if base_path:
             config["base_path"] = base_path
 
     if not config.get("shared_root"):
-        shared_root = simpledialog.askstring("Setup", "Enter shared root folder path:")
+        messagebox.showinfo("Shared Folder", "Please choose your shared root folder...")
+        shared_root = filedialog.askdirectory(title="Select shared root folder")
         if shared_root:
             config["shared_root"] = shared_root
 
@@ -66,9 +85,7 @@ def prompt_for_config(config):
         messagebox.showerror("Error", "Configuration incomplete. Please restart and provide all paths.")
         sys.exit(1)
 
-    # Save updated config.json
-    config_path = resource_path("config.json")
-    with open(config_path, "w") as f:
+    with open(resource_path("config.json"), "w") as f:
         json.dump(config, f, indent=2)
 
     root.destroy()
@@ -134,11 +151,25 @@ def run_scraper():
 
 # === MAIN ENTRY ===
 def main():
-    check_license()
+    config_path = resource_path("config.json")
+    try:
+        with open(config_path, "r") as f:
+            config = json.load(f)
+    except:
+        config = {}
+
+    if not config.get("base_path") or not config.get("shared_root") or not config.get("bar_number"):
+        prompt_for_config(config)
+
+    bar_number = config.get("bar_number")
+    password = config.get("password", "")
+    check_license(bar_number, password)
+
     if len(sys.argv) > 1 and sys.argv[1].isdigit():
         run_scraper()
     else:
         run_gui()
+
 
 if __name__ == "__main__":
     main()

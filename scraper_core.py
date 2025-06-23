@@ -20,6 +20,7 @@ config_path = resource_path("config.json")
 with open(config_path, "r") as f:
     config = json.load(f)
 
+# Re-assign BAR_NUMBER in case config changed at runtime
 BAR_NUMBER = config.get("bar_number")
 BASE_PATH = config.get("base_path")
 SHARED_ROOT = config.get("shared_root")

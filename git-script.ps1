@@ -25,8 +25,19 @@ Write-Host "Pushing changes to remote..."
 git push
 
 Write-Host "Rebuilding executable with PyInstaller..."
-Remove-Item -Recurse -Force .\build
-Remove-Item -Recurse -Force .\dist
+
+if (Test-Path .\build) {
+    Remove-Item -Recurse -Force .\build -ErrorAction SilentlyContinue
+} else {
+    Write-Host "Build folder does not exist, skipping removal."
+}
+
+if (Test-Path .\dist) {
+    Remove-Item -Recurse -Force .\dist -ErrorAction SilentlyContinue
+} else {
+    Write-Host "Dist folder does not exist, skipping removal."
+}
+
 pyinstaller DocketBot.spec
 
 Write-Host "Done."

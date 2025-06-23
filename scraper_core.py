@@ -9,28 +9,22 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 
-# === Load config ===
 def resource_path(relative_path):
     if hasattr(sys, '_MEIPASS'):
         return os.path.join(sys._MEIPASS, relative_path)
     return os.path.join(os.path.abspath("."), relative_path)
 
-# Load config.json
 config_path = resource_path("config.json")
 with open(config_path, "r") as f:
     config = json.load(f)
 
-# Re-assign BAR_NUMBER in case config changed at runtime
 BAR_NUMBER = config.get("bar_number")
-BASE_PATH = config.get("base_path")
-SHARED_ROOT = config.get("shared_root")
+DESTINATION_FOLDER = config.get("destination_folder")
 
-# === Utility functions ===
 def hide():
-    time.sleep(random.randint(0, 2) + random.random())
+    time.sleep(random.uniform(0.5, 2.5))
 
-def ensureFolder(folder_name, root_path):
-    path = os.path.join(root_path, folder_name)
+def ensureFolder(path):
     os.makedirs(path, exist_ok=True)
     print(f"Ensured folder: {path}")
 
@@ -60,17 +54,15 @@ def parseCase(soup: BeautifulSoup):
     return result
 
 def write_cases_to_csv(bar_number, cases):
-    person_dir = os.path.join(BASE_PATH, bar_number)
-    os.makedirs(person_dir, exist_ok=True)
-
-    csv_path = os.path.join(person_dir, f'{bar_number}_Cases.csv')
+    ensureFolder(DESTINATION_FOLDER)
+    csv_path = os.path.join(DESTINATION_FOLDER, f'{bar_number}_Cases.csv')
     seen = set()
 
     if os.path.isfile(csv_path):
         print(f'{csv_path} exists')
         with open(csv_path, 'r', newline='') as f:
             reader = csv.reader(f)
-            next(reader, None)  # skip header
+            next(reader, None)
             for row in reader:
                 if len(row) >= 2:
                     seen.add((row[0].strip(), row[1].strip()))
@@ -95,14 +87,12 @@ def write_cases_to_csv(bar_number, cases):
                 print(f"Case {key} already in CSV")
 
 def run_main():
-    # === Launch Chrome Driver ===
     chrome_binary = resource_path(os.path.join("chrome-win64", "chrome.exe"))
     driver_binary = resource_path(os.path.join("chromedriver-win64", "chromedriver.exe"))
 
     if not os.path.isfile(chrome_binary):
         print(f"Chrome binary not found at: {chrome_binary}")
         sys.exit(1)
-
     if not os.path.isfile(driver_binary):
         print(f"ChromeDriver binary not found at: {driver_binary}")
         sys.exit(1)
@@ -136,26 +126,16 @@ def run_main():
         print(details)
         caseDetails.append(details)
 
-    ensureFolder("Cases", BASE_PATH)
-    ensureFolder(f"Clients {BAR_NUMBER}", SHARED_ROOT)
-
-    user_root = os.path.join(BASE_PATH, BAR_NUMBER)
-    ensureFolder(BAR_NUMBER, BASE_PATH)
+    ensureFolder(DESTINATION_FOLDER)
 
     for case in caseDetails:
         client = case.get('Client Name', 'Unknown')
         case_num = case.get('Case Number', 'NoCaseNumber')
         case_folder = f"{client}; {case_num}"
-        ensureFolder(case_folder, user_root)
+        case_folder_path = os.path.join(DESTINATION_FOLDER, case_folder)
+        ensureFolder(case_folder_path)
 
     write_cases_to_csv(BAR_NUMBER, caseDetails)
-
-    shared_user_root = os.path.join(SHARED_ROOT, f"Clients {BAR_NUMBER}")
-    for case in caseDetails:
-        client = case.get('Client Name', 'Unknown')
-        case_num = case.get('Case Number', 'NoCaseNumber')
-        case_folder = f"{client}; {case_num}"
-        ensureFolder(case_folder, shared_user_root)
 
     driver.quit()
     print("Done!")

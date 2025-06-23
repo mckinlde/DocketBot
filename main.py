@@ -1,27 +1,41 @@
 import tkinter as tk
-from tkinter import messagebox, scrolledtext, filedialog
+from tkinter import messagebox, scrolledtext, filedialog, simpledialog
 import sys
 import os
 import json
 import threading
 
-# === LICENSE CHECK ===
-def get_stored_license_key():
-    try:
-        with open(resource_path("config.json")) as f:
-            config = json.load(f)
-        return config.get("bar_number", "")
-    except Exception:
-        return ""
-
 # === Utility for PyInstaller pathing ===
 def resource_path(relative_path):
-    """ Get absolute path to resource, works for dev and for PyInstaller """
     if hasattr(sys, '_MEIPASS'):
         return os.path.join(sys._MEIPASS, relative_path)
     return os.path.join(os.path.abspath("."), relative_path)
 
-# === Redirect print to GUI text box ===
+def default_desktop_path():
+    return os.path.join(os.path.expanduser("~"), "Desktop", "00000 Misdemeanor Clients")
+
+def ensure_config():
+    path = resource_path("config.json")
+    if not os.path.exists(path):
+        config = {
+            "bar_number": "00000",
+            "destination_folder": default_desktop_path()
+        }
+        os.makedirs(config["destination_folder"], exist_ok=True)
+        with open(path, "w") as f:
+            json.dump(config, f, indent=2)
+    else:
+        with open(path, "r") as f:
+            config = json.load(f)
+        if "bar_number" not in config:
+            config["bar_number"] = "00000"
+        if "destination_folder" not in config:
+            config["destination_folder"] = default_desktop_path()
+        os.makedirs(config["destination_folder"], exist_ok=True)
+        with open(path, "w") as f:
+            json.dump(config, f, indent=2)
+    return config
+
 class StdoutRedirector:
     def __init__(self, text_widget):
         self.text_widget = text_widget
@@ -33,143 +47,43 @@ class StdoutRedirector:
         self.text_widget.configure(state='disabled')
 
     def flush(self):
-        pass  # For compatibility with file-like object
+        pass
 
-# === Initial User Config ===
-def prompt_for_config(config):
-    import tkinter.simpledialog as simpledialog
+def run_gui():
+    config_path = resource_path("config.json")
+    config = ensure_config()
+
+    def save_config():
+        with open(config_path, "w") as f:
+            json.dump(config, f, indent=2)
 
     root = tk.Tk()
-    root.title("Initial Configuration")
-    root.geometry("400x200")
-    root.eval('tk::PlaceWindow . center')
+    root.title("DocketBot")
+    root.geometry("850x650")
 
-    root.update()
+    label_bar = tk.Label(root, text=f"Bar Number: {config['bar_number']}", font=("Arial", 10, "bold"))
+    label_bar.pack(pady=5)
 
-    # Display current bar_number
-    bar_number = config.get("bar_number", "")
-    destination_folder = config.get("destination_folder", "")
+    label_dest = tk.Label(root, text=f"Destination Folder: {config['destination_folder']}", font=("Arial", 10))
+    label_dest.pack(pady=5)
 
     def change_bar_number():
-        new_bar_number = simpledialog.askstring("Change Bar Number", "Enter your Docket ID (Bar Number):", parent=root)
-        if new_bar_number:
-            config["bar_number"] = new_bar_number
-            label_bar_number.config(text=f"Bar Number: {new_bar_number}")
-            with open(resource_path("config.json"), "w") as f:
-                json.dump(config, f, indent=2)
+        new_bar = simpledialog.askstring("Change Bar Number", "Enter new Bar Number:", parent=root)
+        if new_bar:
+            config["bar_number"] = new_bar
+            label_bar.config(text=f"Bar Number: {new_bar}")
+            # auto-update destination folder if it includes bar number
+            if "Misdemeanor Clients" in config["destination_folder"]:
+                base = os.path.dirname(config["destination_folder"])
+                config["destination_folder"] = os.path.join(base, f"{new_bar} Misdemeanor Clients")
+                os.makedirs(config["destination_folder"], exist_ok=True)
+                label_dest.config(text=f"Destination Folder: {config['destination_folder']}")
+            save_config()
 
-    def change_destination_folder():
-        base_folder = filedialog.askdirectory(title="Select base directory", parent=root)
+    def change_folder():
+        base_folder = filedialog.askdirectory(title="Select base folder")
         if base_folder and config.get("bar_number"):
             final_folder = os.path.join(base_folder, f"{config['bar_number']} Misdemeanor Clients")
             os.makedirs(final_folder, exist_ok=True)
             config["destination_folder"] = final_folder
-            label_destination_folder.config(text=f"Destination Folder: {final_folder}")
-            with open(resource_path("config.json"), "w") as f:
-                json.dump(config, f, indent=2)
-
-    label_bar_number = tk.Label(root, text=f"Bar Number: {bar_number}")
-    label_bar_number.pack(pady=10)
-
-    label_destination_folder = tk.Label(root, text=f"Destination Folder: {destination_folder}")
-    label_destination_folder.pack(pady=10)
-
-    button_change_bar_number = tk.Button(root, text="Change Bar Number", command=change_bar_number)
-    button_change_bar_number.pack(pady=5)
-
-    button_change_folder = tk.Button(root, text="Change Destination Folder", command=change_destination_folder)
-    button_change_folder.pack(pady=5)
-
-    root.mainloop()
-
-# === GUI Function ===
-def run_gui():
-    config_path = resource_path("config.json")
-    try:
-        with open(config_path, "r") as f:
-            config = json.load(f)
-    except Exception as e:
-        messagebox.showerror("Error", f"Could not load config.json: {e}")
-        sys.exit(1)
-
-    if not config.get("destination_folder") or not config.get("bar_number"):
-        prompt_for_config(config)
-        # Reload updated config
-        with open(resource_path("config.json"), "r") as f:
-            config = json.load(f)
-
-    bar_number = config.get("bar_number")
-    destination_folder = config.get("destination_folder")
-
-    root = tk.Tk()
-    root.title("DocketBot")
-
-    label = tk.Label(root, text=f"Run scraper for Bar #{bar_number}?")
-    label.pack(pady=10)
-
-    output_box = scrolledtext.ScrolledText(root, state='disabled', width=80, height=20, wrap='word')
-    output_box.pack(padx=10, pady=10)
-
-    # Redirect print output to text box
-    sys.stdout = StdoutRedirector(output_box)
-    sys.stderr = StdoutRedirector(output_box)
-
-    continue_event = threading.Event()
-
-    def run_script():
-        try:
-            btn_run.config(state='disabled')  # disable Run button
-            btn_continue.config(state='normal')  # enable Continue button
-
-            def target():
-                from scraper_core import run_main
-                run_main(continue_event=continue_event)
-
-            threading.Thread(target=target, daemon=True).start()
-
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to run scraper: {e}")
-            btn_run.config(state='normal')
-            btn_continue.config(state='disabled')
-
-    def continue_scrape():
-        btn_continue.config(state='disabled')
-        print("\nUser clicked Continue: proceeding with scraping...\n")
-        continue_event.set()
-
-    btn_run = tk.Button(root, text="Start", width=20, command=run_script)
-    btn_run.pack(pady=5)
-
-    btn_continue = tk.Button(root, text="Continue (after captcha)", width=30, command=continue_scrape)
-    btn_continue.pack(pady=5)
-    btn_continue.config(state='disabled')
-
-    root.mainloop()
-
-# === CLI Handler ===
-def run_scraper():
-    from scraper_core import run_main
-    run_main()
-
-# === MAIN ENTRY ===
-def main():
-    config_path = resource_path("config.json")
-    try:
-        with open(config_path, "r") as f:
-            config = json.load(f)
-    except:
-        config = {}
-
-    if not config.get("destination_folder") or not config.get("bar_number"):
-        prompt_for_config(config)
-
-    bar_number = config.get("bar_number")
-    # Removed password check
-
-    if len(sys.argv) > 1 and sys.argv[1].isdigit():
-        run_scraper()
-    else:
-        run_gui()
-
-if __name__ == "__main__":
-    main()
+            label

@@ -144,7 +144,7 @@ def run_gui():
         print("\nUser clicked Continue: proceeding with scraping...\n")
         continue_event.set()
 
-    btn_run = tk.Button(root, text="Run Now", width=20, command=run_script)
+    btn_run = tk.Button(root, text="Start", width=20, command=run_script)
     btn_run.pack(pady=5)
 
     btn_continue = tk.Button(root, text="Continue (after captcha)", width=30, command=continue_scrape)

@@ -86,4 +86,60 @@ def run_gui():
             final_folder = os.path.join(base_folder, f"{config['bar_number']} Misdemeanor Clients")
             os.makedirs(final_folder, exist_ok=True)
             config["destination_folder"] = final_folder
-            label
+            label_dest.config(text=f"Destination Folder: {final_folder}")
+            save_config()
+
+    tk.Button(root, text="Change Bar Number", command=change_bar_number).pack(pady=2)
+    tk.Button(root, text="Change Destination Folder", command=change_folder).pack(pady=2)
+
+    output_box = scrolledtext.ScrolledText(root, state='disabled', width=100, height=25, wrap='word')
+    output_box.pack(padx=10, pady=10)
+
+    sys.stdout = StdoutRedirector(output_box)
+    sys.stderr = StdoutRedirector(output_box)
+
+    continue_event = threading.Event()
+
+    def run_script():
+        try:
+            btn_run.config(state='disabled')
+            btn_continue.config(state='normal')
+
+            def target():
+                from scraper_core import run_main
+                run_main(continue_event=continue_event)
+
+            threading.Thread(target=target, daemon=True).start()
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to run scraper: {e}")
+            btn_run.config(state='normal')
+            btn_continue.config(state='disabled')
+
+    def continue_scrape():
+        btn_continue.config(state='disabled')
+        print("\nUser clicked Continue: proceeding with scraping...\n")
+        continue_event.set()
+
+    btn_run = tk.Button(root, text="Start", width=20, command=run_script)
+    btn_run.pack(pady=5)
+
+    btn_continue = tk.Button(root, text="Continue (after captcha)", width=30, command=continue_scrape)
+    btn_continue.pack(pady=5)
+    btn_continue.config(state='disabled')
+
+    root.mainloop()
+
+def run_scraper():
+    from scraper_core import run_main
+    run_main()
+
+def main():
+    ensure_config()
+    if len(sys.argv) > 1 and sys.argv[1].isdigit():
+        run_scraper()
+    else:
+        run_gui()
+
+if __name__ == "__main__":
+    main()

@@ -103,9 +103,10 @@ def run_gui():
             save_config()
 
     tk.Button(dest_frame, text="Change", command=change_folder).pack(anchor="w", pady=2)
+    tk.Button(dest_frame, text="Open Folder", command=lambda: open_folder(config["destination_folder"])).pack(anchor="w", pady=2)
 
     # === Output Box ===
-    output_box = scrolledtext.ScrolledText(root, state='disabled', width=80, height=8, wrap='word')  # Fixed size
+    output_box = scrolledtext.ScrolledText(root, state='disabled', width=80, height=12, wrap='word')  # Fixed size
     output_box.pack(pady=15, expand=False)  # Removed fill="both" to keep it small
 
     sys.stdout = StdoutRedirector(output_box)
@@ -124,8 +125,6 @@ def run_gui():
             def target():
                 from scraper_core import run_main
                 run_main(continue_event=continue_event)
-                # Open the destination folder after scraping is done
-                open_folder(config["destination_folder"])
 
             threading.Thread(target=target, daemon=True).start()
 

@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import messagebox, scrolledtext
+from tkinter import messagebox, scrolledtext, filedialog
 import sys
 import os
 import json
@@ -13,16 +13,6 @@ def get_stored_license_key():
         return config.get("bar_number", "")
     except Exception:
         return ""
-
-def check_license(bar_number, password):
-    try:
-        # TODO: Replace this dummy check with API request
-        if not (bar_number == "20789" and password):
-            raise Exception("Invalid login or expired license")
-    except Exception as e:
-        print("License check failed:", e)
-        sys.exit(1)
-
 
 # === Utility for PyInstaller pathing ===
 def resource_path(relative_path):
@@ -48,7 +38,6 @@ class StdoutRedirector:
 # === Initial User Config ===
 def prompt_for_config(config):
     import tkinter.simpledialog as simpledialog
-    from tkinter import filedialog
 
     root = tk.Tk()
     root.title("Initial Configuration")
@@ -57,38 +46,41 @@ def prompt_for_config(config):
 
     root.update()
 
-    # Move bar_number prompt before folder selection
-    if not config.get("bar_number"):
-        bar_number = simpledialog.askstring("Login", "Enter your Docket ID (Bar Number):", parent=root)
-        if bar_number:
-            config["bar_number"] = bar_number
-    
-    if not config.get("password"):
-        password = simpledialog.askstring("Login", "Enter your password:", show='*', parent=root)
-        if password:
-            config["password"] = password
+    # Display current bar_number
+    bar_number = config.get("bar_number", "")
+    destination_folder = config.get("destination_folder", "")
 
-    remember = messagebox.askyesno("Remember Login?", "Save login credentials on this device?", parent=root)
-    config["remember_credentials"] = remember
-    if not remember:
-        config.pop("bar_number", None)
-        config.pop("password", None)
+    def change_bar_number():
+        new_bar_number = simpledialog.askstring("Change Bar Number", "Enter your Docket ID (Bar Number):", parent=root)
+        if new_bar_number:
+            config["bar_number"] = new_bar_number
+            label_bar_number.config(text=f"Bar Number: {new_bar_number}")
+            with open(resource_path("config.json"), "w") as f:
+                json.dump(config, f, indent=2)
 
-
-    if not config.get("destination_folder"):
-        messagebox.showinfo("Folder Selection",
-                            "Choose a base directory. A folder named '[BAR_NUMBER] Misdemeanor Clients' will be created inside it, and the spreadsheet and case files/folders will be saved there.",
-                            parent=root)
+    def change_destination_folder():
         base_folder = filedialog.askdirectory(title="Select base directory", parent=root)
         if base_folder and config.get("bar_number"):
             final_folder = os.path.join(base_folder, f"{config['bar_number']} Misdemeanor Clients")
             os.makedirs(final_folder, exist_ok=True)
             config["destination_folder"] = final_folder
+            label_destination_folder.config(text=f"Destination Folder: {final_folder}")
+            with open(resource_path("config.json"), "w") as f:
+                json.dump(config, f, indent=2)
 
-    with open(resource_path("config.json"), "w") as f:
-        json.dump(config, f, indent=2)
+    label_bar_number = tk.Label(root, text=f"Bar Number: {bar_number}")
+    label_bar_number.pack(pady=10)
 
-    root.destroy()
+    label_destination_folder = tk.Label(root, text=f"Destination Folder: {destination_folder}")
+    label_destination_folder.pack(pady=10)
+
+    button_change_bar_number = tk.Button(root, text="Change Bar Number", command=change_bar_number)
+    button_change_bar_number.pack(pady=5)
+
+    button_change_folder = tk.Button(root, text="Change Destination Folder", command=change_destination_folder)
+    button_change_folder.pack(pady=5)
+
+    root.mainloop()
 
 # === GUI Function ===
 def run_gui():
@@ -107,6 +99,7 @@ def run_gui():
             config = json.load(f)
 
     bar_number = config.get("bar_number")
+    destination_folder = config.get("destination_folder")
 
     root = tk.Tk()
     root.title("DocketBot")
@@ -171,14 +164,12 @@ def main():
         prompt_for_config(config)
 
     bar_number = config.get("bar_number")
-    password = config.get("password", "")
-    check_license(bar_number, password)
+    # Removed password check
 
     if len(sys.argv) > 1 and sys.argv[1].isdigit():
         run_scraper()
     else:
         run_gui()
-
 
 if __name__ == "__main__":
     main()

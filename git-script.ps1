@@ -38,6 +38,6 @@ if (Test-Path .\dist) {
     Write-Host "Dist folder does not exist, skipping removal."
 }
 
-pyinstaller --onefile --windowed --icon=assets\feather.ico DocketBot.py
+pyinstaller --onefile --windowed --icon=assets\feather.ico DocketBot.spec
 
 Write-Host "Done."

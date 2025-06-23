@@ -1,4 +1,3 @@
-````markdown
 # DocketBot
 
 DocketBot is a lightweight desktop application for downloading, organizing, and viewing Washington State court documents. Designed for attorneys and legal researchers, it provides an intuitive GUI interface, secure login workflow, and persistent folder structure to save cases by attorney and docket ID.
@@ -30,7 +29,7 @@ DocketBot is a lightweight desktop application for downloading, organizing, and 
 ```bash
 git clone https://github.com/mckinlde/DocketBot.git
 cd DocketBot
-````
+```
 
 ### 2. Create Virtual Environment
 

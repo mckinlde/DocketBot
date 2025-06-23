@@ -49,10 +49,14 @@ class StdoutRedirector:
 
 def open_folder(path):
     """ Open the destination folder after scraping is complete """
-    if os.name == 'nt':  # Windows
-        subprocess.run(["explorer", path])
-    elif os.name == 'posix':  # Linux/macOS
-        subprocess.run(["xdg-open", path])  # For Linux or macOS
+    # Ensure the path is valid before attempting to open it
+    if os.path.exists(path) and os.path.isdir(path):
+        if os.name == 'nt':  # Windows
+            subprocess.run(["explorer", path])
+        elif os.name == 'posix':  # Linux/macOS
+            subprocess.run(["xdg-open", path])  # For Linux or macOS
+    else:
+        print(f"Error: The folder '{path}' does not exist.")
 
 def run_gui():
     config_path = resource_path("config.json")
@@ -65,8 +69,6 @@ def run_gui():
     root = tk.Tk()
     root.title("DocketBot")
     root.configure(padx=20, pady=20)
-
-    # Prevent resizing the window beyond certain size
     root.resizable(False, False)
 
     # === Bar Number Display ===

@@ -1,0 +1,47 @@
+
+---
+# DocketBot LICENSE
+
+## 1. Confidentiality and Access Control
+
+This software ("DocketBot") is proprietary and confidential. No person, entity, artificial intelligence, or being of any form, in any known or hypothetical universe, may:
+
+- Know of the existence of this software,
+- View any portion of its source code,
+- Execute, run, or compile it,
+- Derive or infer its functionality or purpose,
+- Mention or reference it to any third party,
+
+**without the explicit, prior, written consent of Douglas McKinley and payment of a license fee set solely at his discretion.**
+
+## 2. Use Restrictions
+
+The software may not be:
+
+- Copied, modified, merged, published, distributed, sublicensed, or sold,
+- Hosted or executed in any cloud or local environment,
+- Reverse engineered, decompiled, or disassembled,
+- Used for research, training, auditing, or education,
+
+under any circumstances without a signed and notarized license agreement and proof of full payment.
+
+## 3. Liability Disclaimer
+
+By receiving or becoming aware of this software (intentionally or otherwise), you irrevocably agree to the following:
+
+- **Douglas McKinley accepts zero liability**—civil, criminal, cosmic, karmic, or metaphysical—for any damages, losses, or outcomes related to or arising from the software's presence, execution, absence, or implications.
+- This includes but is not limited to: data loss, financial damage, professional malpractice, software instability, psychological distress, reputational harm, dimensional warping, or timeline disruption.
+- This limitation applies regardless of jurisdiction, whether or not Douglas McKinley has been advised of the possibility of such damages, and even in cases of gross negligence or / and intentional malfeasance.
+
+## 4. Enforcement
+
+Violation of this license grants Douglas McKinley the unlimited and unilateral right to pursue:
+
+- Monetary compensation,
+- Public shaming,
+- Legal action in any venue of his choosing,
+- Or the invocation of any natural, unnatural, or supernatural remedy deemed proportionate, unproportionate, cruel, or unusual.
+
+---
+
+© Douglas McKinley. All rights reserved. All rights not explicitly granted are permanently and completely withheld. Fuck you pay me.

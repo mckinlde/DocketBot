@@ -48,15 +48,15 @@ class StdoutRedirector:
         pass
 
 def open_folder(path):
-    """ Open the destination folder after scraping is complete """
-    # Ensure the path is valid before attempting to open it
+    path = os.path.realpath(path)
+    print(f"[DEBUG] Opening folder: {path}")
     if os.path.exists(path) and os.path.isdir(path):
-        if os.name == 'nt':  # Windows
-            subprocess.run(["explorer", path])
-        elif os.name == 'posix':  # Linux/macOS
-            subprocess.run(["xdg-open", path])  # For Linux or macOS
+        if os.name == 'nt':
+            subprocess.run(f'explorer "{path}"', shell=True)
+        elif os.name == 'posix':
+            subprocess.run(["xdg-open", path])
     else:
-        print(f"Error: The folder '{path}' does not exist.")
+        messagebox.showerror("Error", f"Folder does not exist:\n{path}")
 
 def run_gui():
     config_path = resource_path("config.json")

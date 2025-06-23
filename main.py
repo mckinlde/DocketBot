@@ -65,6 +65,7 @@ def run_gui():
     def save_config():
         with open(config_path, "w") as f:
             json.dump(config, f, indent=2)
+        print(f"[DEBUG] Saved config: {config}")
 
     root = tk.Tk()
     root.title("DocketBot")

@@ -101,7 +101,7 @@ def run_gui():
     tk.Button(dest_frame, text="Change", command=change_folder).pack(anchor="w", pady=2)
 
     # === Output Box ===
-    output_box = scrolledtext.ScrolledText(root, state='disabled', width=80, height=8, wrap='word')  # Adjusted size
+    output_box = scrolledtext.ScrolledText(root, state='disabled', width=50, height=4, wrap='word')  # Adjusted size
     output_box.pack(pady=15, fill="both", expand=True)
 
     sys.stdout = StdoutRedirector(output_box)

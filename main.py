@@ -2,8 +2,16 @@ import tkinter as tk
 from tkinter import messagebox, scrolledtext, filedialog, simpledialog
 import sys
 import os
+import subprocess
 import json
 import threading
+
+def open_folder(path):
+    """ Open the destination folder after scraping is complete """
+    if os.name == 'nt':  # Windows
+        subprocess.run(["explorer", path])
+    elif os.name == 'posix':  # Linux/macOS
+        subprocess.run(["xdg-open", path])  # For Linux or macOS
 
 def resource_path(relative_path):
     if hasattr(sys, '_MEIPASS'):
@@ -98,7 +106,7 @@ def run_gui():
     tk.Button(dest_frame, text="Change", command=change_folder).pack(anchor="w", pady=2)
 
     # === Output Box ===
-    output_box = scrolledtext.ScrolledText(root, state='disabled', width=100, height=12, wrap='word')  # Adjusted height
+    output_box = scrolledtext.ScrolledText(root, state='disabled', width=80, height=80, wrap='word')  # Adjusted height
     output_box.pack(pady=15, fill="both", expand=True)
 
     sys.stdout = StdoutRedirector(output_box)
@@ -117,6 +125,8 @@ def run_gui():
             def target():
                 from scraper_core import run_main
                 run_main(continue_event=continue_event)
+                # Open the destination folder after scraping is done
+                open_folder(config["destination_folder"])
 
             threading.Thread(target=target, daemon=True).start()
 
@@ -134,7 +144,7 @@ def run_gui():
     controls_frame = tk.Frame(root)
     controls_frame.pack(pady=10)
 
-    btn_run = tk.Button(controls_frame, text="Start (Opens browser window)", width=20, command=run_script)
+    btn_run = tk.Button(controls_frame, text="Start", width=20, command=run_script)
     btn_run.pack(side="left", padx=10)
 
     btn_continue = tk.Button(controls_frame, text="Continue (after captcha)", width=30, command=continue_scrape)

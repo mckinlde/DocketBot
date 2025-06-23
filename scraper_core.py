@@ -125,30 +125,31 @@ class Scraper:
         self.driver.set_page_load_timeout(10)
         self.driver.get("https://dw.courts.wa.gov/index.cfm?fa=home.atty&terms=accept&flashform=0")
                 
-        # Autofill bar number
-        try:
-            bar_input = self.driver.find_element(By.ID, "Bar_Nbr")
-            bar_input.clear()
-            bar_input.send_keys(BAR_NUMBER)
-            print(f"Set Bar Number to {BAR_NUMBER}")
-        except Exception as e:
-            print("⚠️ Failed to autofill bar number:", e)
+        # # Autofill bar number
+        # # This just makes the Captcha so suspicious of me
+        # try:
+        #     bar_input = self.driver.find_element(By.ID, "Bar_Nbr")
+        #     bar_input.clear()
+        #     bar_input.send_keys(BAR_NUMBER)
+        #     print(f"Set Bar Number to {BAR_NUMBER}")
+        # except Exception as e:
+        #     print("⚠️ Failed to autofill bar number:", e)
 
-        # Select 90 from dropdown menu using JS and interaction
-        try:
-            dropdown_anchor = WebDriverWait(self.driver, 10).until(
-                EC.element_to_be_clickable((By.CLASS_NAME, "mdc-select__anchor"))
-            )
-            dropdown_anchor.click()
+        # # Select 90 from dropdown menu using JS and interaction
+        # try:
+        #     dropdown_anchor = WebDriverWait(self.driver, 10).until(
+        #         EC.element_to_be_clickable((By.CLASS_NAME, "mdc-select__anchor"))
+        #     )
+        #     dropdown_anchor.click()
 
-            option_90 = WebDriverWait(self.driver, 10).until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, 'li.mdc-list-item[data-value="90"]'))
-            )
+        #     option_90 = WebDriverWait(self.driver, 10).until(
+        #         EC.element_to_be_clickable((By.CSS_SELECTOR, 'li.mdc-list-item[data-value="90"]'))
+        #     )
 
-            ActionChains(self.driver).move_to_element(option_90).click().perform()
-            print("Set number of days to 90")
-        except Exception as e:
-            print("⚠️ Failed to set number of days to 90:", e)
+        #     ActionChains(self.driver).move_to_element(option_90).click().perform()
+        #     print("Set number of days to 90")
+        # except Exception as e:
+        #     print("⚠️ Failed to set number of days to 90:", e)
 
         print("\n*** Please complete the captcha or login in the opened browser window. ***")
         print("*** When done, click the 'Continue' button in the GUI to proceed. ***\n")

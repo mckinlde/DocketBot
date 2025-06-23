@@ -5,7 +5,6 @@ import os
 import json
 import threading
 
-# === Utility for PyInstaller pathing ===
 def resource_path(relative_path):
     if hasattr(sys, '_MEIPASS'):
         return os.path.join(sys._MEIPASS, relative_path)
@@ -16,24 +15,22 @@ def default_desktop_path():
 
 def ensure_config():
     path = resource_path("config.json")
-    if not os.path.exists(path):
-        config = {
-            "bar_number": "00000",
-            "destination_folder": default_desktop_path()
-        }
-        os.makedirs(config["destination_folder"], exist_ok=True)
-        with open(path, "w") as f:
-            json.dump(config, f, indent=2)
-    else:
-        with open(path, "r") as f:
-            config = json.load(f)
-        if "bar_number" not in config:
-            config["bar_number"] = "00000"
-        if "destination_folder" not in config:
-            config["destination_folder"] = default_desktop_path()
-        os.makedirs(config["destination_folder"], exist_ok=True)
-        with open(path, "w") as f:
-            json.dump(config, f, indent=2)
+    config = {
+        "bar_number": "00000",
+        "destination_folder": default_desktop_path()
+    }
+
+    if os.path.exists(path):
+        try:
+            with open(path, "r") as f:
+                existing = json.load(f)
+                config.update(existing)
+        except:
+            pass
+
+    with open(path, "w") as f:
+        json.dump(config, f, indent=2)
+
     return config
 
 class StdoutRedirector:
@@ -59,41 +56,50 @@ def run_gui():
 
     root = tk.Tk()
     root.title("DocketBot")
-    root.geometry("850x650")
+    root.geometry("850x680")
+    root.configure(padx=20, pady=20)
 
-    label_bar = tk.Label(root, text=f"Bar Number: {config['bar_number']}", font=("Arial", 10, "bold"))
-    label_bar.pack(pady=5)
+    # === Bar Number Display ===
+    bar_frame = tk.Frame(root)
+    bar_frame.pack(anchor="w", pady=(0, 5))
 
-    label_dest = tk.Label(root, text=f"Destination Folder: {config['destination_folder']}", font=("Arial", 10))
-    label_dest.pack(pady=5)
+    label_bar = tk.Label(bar_frame, text=f"Bar Number: {config['bar_number']}", font=("Segoe UI", 11, "bold"))
+    label_bar.pack(anchor="w")
 
     def change_bar_number():
         new_bar = simpledialog.askstring("Change Bar Number", "Enter new Bar Number:", parent=root)
         if new_bar:
             config["bar_number"] = new_bar
             label_bar.config(text=f"Bar Number: {new_bar}")
-            # auto-update destination folder if it includes bar number
+            # Optionally update folder path
             if "Misdemeanor Clients" in config["destination_folder"]:
                 base = os.path.dirname(config["destination_folder"])
                 config["destination_folder"] = os.path.join(base, f"{new_bar} Misdemeanor Clients")
-                os.makedirs(config["destination_folder"], exist_ok=True)
                 label_dest.config(text=f"Destination Folder: {config['destination_folder']}")
             save_config()
+
+    tk.Button(bar_frame, text="Change", command=change_bar_number).pack(anchor="w", pady=2)
+
+    # === Destination Folder Display ===
+    dest_frame = tk.Frame(root)
+    dest_frame.pack(anchor="w", pady=(10, 5))
+
+    label_dest = tk.Label(dest_frame, text=f"Destination Folder: {config['destination_folder']}", font=("Segoe UI", 10))
+    label_dest.pack(anchor="w")
 
     def change_folder():
         base_folder = filedialog.askdirectory(title="Select base folder")
         if base_folder and config.get("bar_number"):
             final_folder = os.path.join(base_folder, f"{config['bar_number']} Misdemeanor Clients")
-            os.makedirs(final_folder, exist_ok=True)
             config["destination_folder"] = final_folder
             label_dest.config(text=f"Destination Folder: {final_folder}")
             save_config()
 
-    tk.Button(root, text="Change Bar Number", command=change_bar_number).pack(pady=2)
-    tk.Button(root, text="Change Destination Folder", command=change_folder).pack(pady=2)
+    tk.Button(dest_frame, text="Change", command=change_folder).pack(anchor="w", pady=2)
 
-    output_box = scrolledtext.ScrolledText(root, state='disabled', width=100, height=25, wrap='word')
-    output_box.pack(padx=10, pady=10)
+    # === Output Box ===
+    output_box = scrolledtext.ScrolledText(root, state='disabled', width=100, height=24, wrap='word')
+    output_box.pack(pady=15, fill="both", expand=True)
 
     sys.stdout = StdoutRedirector(output_box)
     sys.stderr = StdoutRedirector(output_box)
@@ -104,6 +110,9 @@ def run_gui():
         try:
             btn_run.config(state='disabled')
             btn_continue.config(state='normal')
+
+            # Only now create the folder
+            os.makedirs(config["destination_folder"], exist_ok=True)
 
             def target():
                 from scraper_core import run_main
@@ -121,11 +130,15 @@ def run_gui():
         print("\nUser clicked Continue: proceeding with scraping...\n")
         continue_event.set()
 
-    btn_run = tk.Button(root, text="Start", width=20, command=run_script)
-    btn_run.pack(pady=5)
+    # === Control Buttons ===
+    controls_frame = tk.Frame(root)
+    controls_frame.pack(pady=10)
 
-    btn_continue = tk.Button(root, text="Continue (after captcha)", width=30, command=continue_scrape)
-    btn_continue.pack(pady=5)
+    btn_run = tk.Button(controls_frame, text="Start", width=20, command=run_script)
+    btn_run.pack(side="left", padx=10)
+
+    btn_continue = tk.Button(controls_frame, text="Continue (after captcha)", width=30, command=continue_scrape)
+    btn_continue.pack(side="left", padx=10)
     btn_continue.config(state='disabled')
 
     root.mainloop()

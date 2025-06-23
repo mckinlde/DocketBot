@@ -119,6 +119,20 @@ class Scraper:
         print('Opening browser to login page...')
         self.driver.set_page_load_timeout(10)
         self.driver.get("https://dw.courts.wa.gov/index.cfm?fa=home.atty&terms=accept&flashform=0")
+        # Autofill Bar Number and set number of days to 90
+        try:
+            bar_input = self.driver.find_element("id", "Bar_Nbr")
+            days_input = self.driver.find_element("name", "numberofdays")
+            
+            bar_input.clear()
+            bar_input.send_keys(BAR_NUMBER)
+
+            # JavaScript is safer here due to shadow DOMs or MDC framework
+            self.driver.execute_script("document.getElementsByName('numberofdays')[0].value = '90';")
+
+            print(f"Set bar number to {BAR_NUMBER} and number of days to 90")
+        except Exception as e:
+            print("⚠️ Could not autofill bar number or set days:", e)
 
         print("\n*** Please complete the captcha or login in the opened browser window. ***")
         print("*** When done, click the 'Continue' button in the GUI to proceed. ***\n")

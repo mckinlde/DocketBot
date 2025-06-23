@@ -2,6 +2,8 @@
 
 DocketBot is a lightweight desktop application for downloading, organizing, and viewing Washington State court documents. Designed for attorneys and legal researchers, it provides an intuitive GUI interface, secure login workflow, and persistent folder structure to save cases by attorney and docket ID.
 
+Potential Customers: https://www.wacdl.org/AF_MemberDirectory.asp
+
 ---
 
 ## 🚀 Features

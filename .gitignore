@@ -11,7 +11,7 @@ __pycache__/
 # Ignore build artifacts
 build/
 dist/
-*.spec
+# don't ignore *.spec
 
 # Ignore local dev files
 .spyproject/

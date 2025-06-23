@@ -64,8 +64,10 @@ def run_gui():
 
     root = tk.Tk()
     root.title("DocketBot")
-    root.geometry("850x600")
     root.configure(padx=20, pady=20)
+
+    # Prevent resizing the window beyond certain size
+    root.resizable(False, False)
 
     # === Bar Number Display ===
     bar_frame = tk.Frame(root)

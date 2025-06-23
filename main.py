@@ -1,17 +1,9 @@
-import tkinter as tk
-from tkinter import messagebox, scrolledtext, filedialog, simpledialog
-import sys
-import os
 import subprocess
+import os
 import json
 import threading
-
-def open_folder(path):
-    """ Open the destination folder after scraping is complete """
-    if os.name == 'nt':  # Windows
-        subprocess.run(["explorer", path])
-    elif os.name == 'posix':  # Linux/macOS
-        subprocess.run(["xdg-open", path])  # For Linux or macOS
+import tkinter as tk
+from tkinter import messagebox, scrolledtext, filedialog, simpledialog
 
 def resource_path(relative_path):
     if hasattr(sys, '_MEIPASS'):
@@ -54,6 +46,13 @@ class StdoutRedirector:
     def flush(self):
         pass
 
+def open_folder(path):
+    """ Open the destination folder after scraping is complete """
+    if os.name == 'nt':  # Windows
+        subprocess.run(["explorer", path])
+    elif os.name == 'posix':  # Linux/macOS
+        subprocess.run(["xdg-open", path])  # For Linux or macOS
+
 def run_gui():
     config_path = resource_path("config.json")
     config = ensure_config()
@@ -79,11 +78,6 @@ def run_gui():
         if new_bar:
             config["bar_number"] = new_bar
             label_bar.config(text=f"Bar Number: {new_bar}")
-            # Optionally update folder path
-            if "Misdemeanor Clients" in config["destination_folder"]:
-                base = os.path.dirname(config["destination_folder"])
-                config["destination_folder"] = os.path.join(base, f"{new_bar} Misdemeanor Clients")
-                label_dest.config(text=f"Destination Folder: {config['destination_folder']}")
             save_config()
 
     tk.Button(bar_frame, text="Change", command=change_bar_number).pack(anchor="w", pady=2)
@@ -106,7 +100,7 @@ def run_gui():
     tk.Button(dest_frame, text="Change", command=change_folder).pack(anchor="w", pady=2)
 
     # === Output Box ===
-    output_box = scrolledtext.ScrolledText(root, state='disabled', width=80, height=80, wrap='word')  # Adjusted height
+    output_box = scrolledtext.ScrolledText(root, state='disabled', width=80, height=8, wrap='word')  # Adjusted size
     output_box.pack(pady=15, fill="both", expand=True)
 
     sys.stdout = StdoutRedirector(output_box)

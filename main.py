@@ -85,7 +85,7 @@ def run_gui():
             label_bar.config(text=f"Bar Number: {new_bar}")
             save_config()
 
-    tk.Button(bar_frame, text="Change", command=change_bar_number).pack(anchor="w", pady=2)
+    tk.Button(bar_frame, text="Change Bar Number", command=change_bar_number).pack(anchor="w", pady=2)
 
     # === Destination Folder Display ===
     dest_frame = tk.Frame(root)
@@ -102,8 +102,11 @@ def run_gui():
             label_dest.config(text=f"Destination Folder: {final_folder}")
             save_config()
 
-    tk.Button(dest_frame, text="Change", command=change_folder).pack(anchor="w", pady=2)
-    tk.Button(dest_frame, text="Open Folder", command=lambda: open_folder(config["destination_folder"])).pack(anchor="w", pady=2)
+    buttons_row = tk.Frame(dest_frame)
+    buttons_row.pack(anchor="w", pady=2)
+
+    tk.Button(buttons_row, text="Change Folder", command=change_folder).pack(side="left", padx=(0, 10))
+    tk.Button(buttons_row, text="Open Folder", command=lambda: open_folder(config["destination_folder"])).pack(side="left")
 
     # === Output Box ===
     output_box = scrolledtext.ScrolledText(root, state='disabled', width=80, height=12, wrap='word')  # Fixed size

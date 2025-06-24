@@ -127,7 +127,7 @@ def run_gui():
             os.makedirs(config["destination_folder"], exist_ok=True)
 
             def target():
-                from scraper_core import run_main
+                from scrape_cases import run_main
                 run_main(continue_event=continue_event)
 
             threading.Thread(target=target, daemon=True).start()
@@ -156,7 +156,7 @@ def run_gui():
     root.mainloop()
 
 def run_scraper():
-    from scraper_core import run_main
+    from scrape_cases import run_main
     run_main()
 
 def main():

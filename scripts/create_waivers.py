@@ -11,6 +11,12 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.utils import ImageReader
 from io import BytesIO
 
+def resource_path(relative_path):
+    # Support PyInstaller packaging
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.abspath(relative_path)
+
 def load_config():
     config_path = os.path.join(os.environ["LOCALAPPDATA"], "DocketBot", "config.json")
     with open(config_path, "r") as f:
@@ -20,15 +26,17 @@ def generate_overlay(signature_path, client_name, case_number):
     packet = BytesIO()
     can = canvas.Canvas(packet, pagesize=letter)
 
-    # Example positions — adjust to match your waiver PDF template
-    can.drawString(100, 650, f"Client: {client_name}")
-    can.drawString(100, 630, f"Case: {case_number}")
-    can.drawString(100, 610, f"Date: {datetime.date.today().strftime('%Y-%m-%d')}")
+    # Fixed positions that match included waiver PDF
+    can.setFont("Helvetica", 11)
+    can.drawString(100, 655, f"{client_name}")
+    can.drawString(100, 635, f"{case_number}")
+    can.drawString(100, 615, datetime.date.today().strftime('%Y-%m-%d'))
 
+    # Signature behind the line
     if os.path.isfile(signature_path):
         try:
             img = ImageReader(signature_path)
-            can.drawImage(img, 100, 560, width=150, preserveAspectRatio=True, mask='auto')
+            can.drawImage(img, 320, 130, width=180, preserveAspectRatio=True, mask='auto')
         except Exception as e:
             print(f"[ERROR] Failed to embed signature: {e}")
 
@@ -42,9 +50,12 @@ def create_waiver_page(template_path, signature_path, client_name, case_number):
         overlay_pdf = generate_overlay(signature_path, client_name, case_number)
 
         writer = PdfWriter()
-        page = base_pdf.pages[0]
-        page.merge_page(overlay_pdf.pages[0])
-        writer.add_page(page)
+        base_page = base_pdf.pages[0]
+        overlay_page = overlay_pdf.pages[0]
+
+        # Merge overlay first to place behind form fields (visual layering)
+        base_page.merge_page(overlay_page)
+        writer.add_page(base_page)
 
         output = BytesIO()
         writer.write(output)
@@ -59,22 +70,20 @@ def main(waiver_event=None):
     sig_path = config.get("waiver.signature_image_path")
     output_dir = config.get("waiver.waiver_output_dir")
     bar = config.get("scraper.bar_number")
-
     csv_path = os.path.join(config["scraper.destination_folder"], f"{bar}_Cases.csv")
-    template_path = os.path.join(os.path.expanduser("~"), "Desktop", f"Waiver {bar}.pdf")
+
+    template_path = resource_path("assets/waiver_template.pdf")
 
     if not os.path.isfile(csv_path):
         print(f"[ERROR] Case CSV not found: {csv_path}")
         return
     if not os.path.isfile(template_path):
-        print(f"[ERROR] Template PDF not found: {template_path}")
+        print(f"[ERROR] Waiver template PDF not found: {template_path}")
         return
 
     if waiver_event:
         print("\n*** Waiting for user to click 'Continue' in GUI before generating waivers... ***\n")
         waiver_event.wait()
-
-    from PyPDF2 import PdfWriter
 
     writer = PdfWriter()
     with open(csv_path, "r", encoding="utf-7") as f:

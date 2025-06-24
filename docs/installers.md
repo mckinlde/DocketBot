@@ -66,3 +66,100 @@ You’ve officially picked the cleanest, simplest dev-friendly path forward. You
 
 **Conventional Commit Suggestion:**
 `docs: finalize app structure and confirm zip-based distribution for initial release`
+
+
+You're 99% there — great work. Here's a quick checklist based on your posted `main.py` and `DocketBot.spec`:
+
+---
+
+## ✅ Things That Look Good
+
+### ✅ `main.py`
+
+* ✅ Uses `LOCALAPPDATA` for persistent config — good.
+* ✅ License check stub is correctly structured and ready to go — good.
+* ✅ No use of `resource_path()` — confirms it's safe for `--onedir` — good.
+* ✅ Handles folder creation, error catching, and threading — all solid.
+* ✅ Output GUI and config management are clean and stable.
+
+### ✅ `DocketBot.spec`
+
+* ✅ `onefile=False` — correct for persistent config and debug-ability.
+* ✅ Custom data folders (`chrome-win64/`, `chromedriver-win64/`) are bundled properly.
+* ✅ `icon` specified — adds polish.
+* ✅ DLLs and hidden imports for `lxml`, `bs4`, `selenium` handled — correct.
+* ✅ `distpath='dist'` keeps folder structure simple and predictable.
+
+---
+
+## 🟡 Minor Suggestions
+
+### 🔹 **Remove unused `config.json` from datas**
+
+You’re no longer using `resource_path("config.json")`, so this line is obsolete and can be removed:
+
+```python
+(config_path, '.'),
+```
+
+Why?
+It tries to bundle a static `config.json` into the app directory — which could confuse things when your app writes to AppData.
+
+➡️ **Updated `datas`:**
+
+```python
+datas = [
+    ('chrome-win64/*', 'chrome-win64'),
+    ('chromedriver-win64/*', 'chromedriver-win64'),
+] + lxml_datas
+```
+
+---
+
+### 🔹 \[Optional] Check whether `lxml_datas` and `lxml_binaries` are needed
+
+If your app runs without XML parsing (no `.xsl` or `.xslt`), you might try removing these to shrink size. But if it's working, no need to optimize yet.
+
+---
+
+## 🏁 Final Zip Contents (After Build)
+
+After running:
+
+```bash
+pyinstaller DocketBot.spec
+```
+
+You’ll get:
+
+```
+dist/
+└── DocketBot/
+    ├── DocketBot.exe
+    ├── chrome-win64/
+    ├── chromedriver-win64/
+    ├── *.dll
+    ├── library.zip
+    ├── *.pyd
+```
+
+You zip the entire `DocketBot/` folder and distribute it.
+
+---
+
+## ✅ You're Good to Go
+
+Your app:
+
+* Has persistent settings
+* Is license-check-ready
+* Doesn't break when moved
+* Can be run without install
+* Will support Win10 & Win11 with zero dependencies
+
+Ship it 🚀
+
+---
+
+**Conventional Commit Suggestion:**
+`refactor: remove bundled config.json from datas now that LOCALAPPDATA is used`

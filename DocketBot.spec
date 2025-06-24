@@ -51,5 +51,6 @@ exe = EXE(
     strip=False,
     upx=True,
     console=False,  # Set to True if you want to see stdout in a terminal
-    onefile=True
+    onefile=False,
+    distpath='dist'
 )

@@ -38,6 +38,6 @@ if (Test-Path .\dist) {
     Write-Host "Dist folder does not exist, skipping removal."
 }
 
-pyinstaller DocketBot.spec
+pyinstaller --clean DocketBot.spec
 
 Write-Host "Done."

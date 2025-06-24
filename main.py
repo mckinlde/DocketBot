@@ -6,20 +6,24 @@ import threading
 import tkinter as tk
 from tkinter import messagebox, scrolledtext, filedialog, simpledialog
 
-def resource_path(relative_path):
-    if hasattr(sys, '_MEIPASS'):
-        return os.path.join(sys._MEIPASS, relative_path)
-    return os.path.join(os.path.abspath("."), relative_path)
+APP_NAME = "DocketBot"
+
+# ✅ Use LOCALAPPDATA for config
+def config_path():
+    return os.path.join(os.environ["LOCALAPPDATA"], APP_NAME, "config.json")
 
 def default_desktop_path():
     return os.path.join(os.path.expanduser("~"), "Desktop", "00000 Misdemeanor Clients")
 
+# ✅ Initialize config in LOCALAPPDATA
 def ensure_config():
-    path = resource_path("config.json")
+    path = config_path()
     config = {
         "bar_number": "00000",
         "destination_folder": default_desktop_path()
     }
+
+    os.makedirs(os.path.dirname(path), exist_ok=True)
 
     if os.path.exists(path):
         try:
@@ -59,11 +63,11 @@ def open_folder(path):
         messagebox.showerror("Error", f"Folder does not exist:\n{path}")
 
 def run_gui():
-    config_path = resource_path("config.json")
+    path = config_path()
     config = ensure_config()
 
     def save_config():
-        with open(config_path, "w") as f:
+        with open(path, "w") as f:
             json.dump(config, f, indent=2)
         print(f"[DEBUG] Saved config: {config}")
 
@@ -110,8 +114,8 @@ def run_gui():
     tk.Button(buttons_row, text="Open Folder", command=lambda: open_folder(config["destination_folder"])).pack(side="left")
 
     # === Output Box ===
-    output_box = scrolledtext.ScrolledText(root, state='disabled', width=80, height=12, wrap='word')  # Fixed size
-    output_box.pack(pady=15, expand=False)  # Removed fill="both" to keep it small
+    output_box = scrolledtext.ScrolledText(root, state='disabled', width=80, height=12, wrap='word')
+    output_box.pack(pady=15, expand=False)
 
     sys.stdout = StdoutRedirector(output_box)
     sys.stderr = StdoutRedirector(output_box)
@@ -122,12 +126,10 @@ def run_gui():
         try:
             btn_run.config(state='disabled')
             btn_continue.config(state='normal')
-
-            # Only now create the folder
             os.makedirs(config["destination_folder"], exist_ok=True)
 
             def target():
-                from scrape_cases import run_main
+                from scripts.scrape_cases import run_main
                 run_main(continue_event=continue_event)
 
             threading.Thread(target=target, daemon=True).start()
@@ -156,7 +158,7 @@ def run_gui():
     root.mainloop()
 
 def run_scraper():
-    from scrape_cases import run_main
+    from scripts.scrape_cases import run_main
     run_main()
 
 def main():

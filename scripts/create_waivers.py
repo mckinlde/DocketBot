@@ -93,6 +93,7 @@ def parse_case(soup: BeautifulSoup):
     result["Court"] = result.get("Court", "")
     return result
 
+
 def run_browser_and_scrape(event=None):
     print("[INFO] Launching browser before waiting on GUI...")
     print("🧠 Please complete the CAPTCHA in the browser.")
@@ -105,7 +106,6 @@ def run_browser_and_scrape(event=None):
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--new-window")
-    # chrome_options.add_argument("--window-position=1000,1000")  # Optional: launch off-center
 
     driver = webdriver.Chrome(service=Service(resource_path(CHROMEDRIVER_PATH)), options=chrome_options)
     driver.set_page_load_timeout(10)
@@ -116,6 +116,27 @@ def run_browser_and_scrape(event=None):
 
     if event:
         event.wait()
+
+    driver.refresh()
+    time.sleep(3)
+
+    html = driver.page_source
+    soup = BeautifulSoup(html, "lxml")
+
+    case_soups = soup.find_all("div", class_="dw-search-result std-vertical-med-margin dw-cal-search-result")
+    print(f"Found {len(case_soups)} cases (before filtering)...")
+
+    case_details = []
+    for case_soup in case_soups:
+        parsed = parse_case(case_soup)
+        if parsed.get("Court", "").strip().upper() != "SUNNYSIDE MUNICIPAL":
+            continue
+        case_details.append(parsed)
+
+    print(f"🧾 Filtered to {len(case_details)} Sunnyside cases.")
+    driver.quit()
+    return case_details
+
 
 def main(event=None):
     config = load_config()

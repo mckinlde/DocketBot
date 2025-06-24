@@ -112,20 +112,21 @@ def run_gui():
     notebook.add(tab_scraper, text='Scrape Cases')
     notebook.add(tab_waivers, text='Generate Waivers')
 
-    settings_labels = []
+    # Wrap the settings widgets in a sub-frame so we can cleanly reset
+    settings_frame = tk.Frame(tab_settings)
+    settings_frame.pack(fill='both', expand=True)
 
     def update_settings_tab():
-        for label in settings_labels:
-            label.destroy()
-        settings_labels.clear()
-        tk.Label(tab_settings, text="Configuration Settings (read-only)", font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=5)
+        for widget in settings_frame.winfo_children():
+            widget.destroy()
+
+        tk.Label(settings_frame, text="Configuration Settings (read-only)", font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=5)
         for key in sorted(CONFIG_KEYS):
-            lbl = tk.Label(tab_settings, text=f"{key}: {config.get(key, '')}", font=("Segoe UI", 10))
-            lbl.pack(anchor="w")
-            settings_labels.append(lbl)
-        tk.Label(tab_settings, text="\nTo edit settings, switch to the corresponding feature tab.", font=("Segoe UI", 9, "italic"), fg="gray").pack(anchor="w", pady=10)
-        tk.Button(tab_settings, text="Refresh Settings", command=reload_config).pack(anchor="w", pady=5)
-        tk.Button(tab_settings, text="Reset to Defaults", command=perform_reset).pack(anchor="w", pady=5)
+            val = config.get(key, "")
+            tk.Label(settings_frame, text=f"{key}: {val}", font=("Segoe UI", 10)).pack(anchor="w")
+        tk.Label(settings_frame, text="\nTo edit settings, switch to the corresponding feature tab.", font=("Segoe UI", 9, "italic"), fg="gray").pack(anchor="w", pady=10)
+        tk.Button(settings_frame, text="Refresh Settings", command=reload_config).pack(anchor="w", pady=5)
+        tk.Button(settings_frame, text="Reset to Defaults", command=perform_reset).pack(anchor="w", pady=5)
 
     update_settings_tab()
 
@@ -209,8 +210,12 @@ def run_gui():
     btn_waiver_continue.pack(anchor="w", pady=5)
     btn_waiver_continue.config(state='disabled')
 
-    output_box = scrolledtext.ScrolledText(root, state='disabled', width=80, height=12, wrap='word')
-    output_box.pack(pady=15)
+    # === Shared Output Footer ===
+    footer_frame = tk.Frame(root)
+    footer_frame.pack(fill="x", pady=(10, 0))
+
+    output_box = scrolledtext.ScrolledText(footer_frame, state='disabled', width=80, height=12, wrap='word')
+    output_box.pack()
     sys.stdout = StdoutRedirector(output_box)
     sys.stderr = StdoutRedirector(output_box)
 

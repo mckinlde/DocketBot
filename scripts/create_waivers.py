@@ -37,18 +37,25 @@ def normalize_for_grouping(name):
     name = re.sub(r'\b(jr|sr|ii|iii|iv|v)\b\.?', '', name, flags=re.IGNORECASE)
     return re.sub(r'[^a-z]', '', name.lower())
 
-def create_overlay(name, case_num, year):
+def create_overlay(name, case_num, year, sig_path=None, bar_number="00000"):
     packet = BytesIO()
     can = canvas.Canvas(packet, pagesize=letter)
 
+    # Top fields
     name_x, name_y = 60, 648
     cases_x, cases_y = 350, 643
     year_x, year_y = 356, 394
 
+    # Signature + bar fields
+    sig_x, sig_y = 72, 115         # aligned behind "Signature:" line
+    bar_x, bar_y = 390, 102        # aligned next to "WSBA#" field
+
+    # Draw name and year
     can.setFont("Helvetica", 10)
     can.drawString(name_x, name_y, name)
     can.drawString(year_x, year_y, year)
 
+    # Wrap case numbers
     case_nums = case_num.split(", ")
     current_line = ""
     lines = []
@@ -70,6 +77,19 @@ def create_overlay(name, case_num, year):
         y_offset = cases_y - (i * (font_size + 2))
         can.setFont("Helvetica", font_size)
         can.drawString(cases_x, y_offset, line)
+
+    # Signature image
+    if sig_path and os.path.exists(sig_path):
+        try:
+            from reportlab.lib.utils import ImageReader
+            img = ImageReader(sig_path)
+            can.drawImage(img, sig_x, sig_y, width=180, preserveAspectRatio=True, mask='auto')
+        except Exception as e:
+            print(f"[ERROR] Failed to add signature image: {e}")
+
+    # Bar number
+    can.setFont("Helvetica", 10)
+    can.drawString(bar_x, bar_y, bar_number)
 
     can.save()
     packet.seek(0)

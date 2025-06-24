@@ -12,15 +12,10 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-
-# === Load config ===
-def resource_path(relative_path):
-    if hasattr(sys, '_MEIPASS'):
-        return os.path.join(sys._MEIPASS, relative_path)
-    return os.path.join(os.path.abspath("."), relative_path)
+# === Config ===
+def resource_path(path):
+    base = getattr(sys, "_MEIPASS", os.path.abspath("."))
+    return os.path.join(base, path)
 
 def load_config():
     config_path = os.path.join(os.environ["LOCALAPPDATA"], "DocketBot", "config.json")
@@ -31,13 +26,13 @@ config = load_config()
 BAR_NUMBER = config.get("scraper.bar_number", "00000")
 DESTINATION_FOLDER = config.get("scraper.destination_folder", os.path.expanduser("~/Desktop/00000 Misdemeanor Clients"))
 
-# === Utility functions ===
+# === Utility Functions ===
 def hide():
     time.sleep(random.randint(0, 2) + random.random())
 
 def ensureFolder(path):
     os.makedirs(path, exist_ok=True)
-    print(f"Ensured folder: {path}")
+    print(f"📁 Ensured folder: {path}")
 
 def normalize(s):
     return ''.join(s.split()).upper()
@@ -124,32 +119,29 @@ class Scraper:
         self.chrome_binary = resource_path(os.path.join("chrome-win64", "chrome.exe"))
         self.driver_binary = resource_path(os.path.join("chromedriver-win64", "chromedriver.exe"))
         self.driver = None
-        self.ready_event = threading.Event()
 
-    def open_browser_and_wait(self):
-        if not os.path.isfile(self.chrome_binary):
-            print(f"Chrome binary not found at: {self.chrome_binary}")
-            sys.exit(1)
-        if not os.path.isfile(self.driver_binary):
-            print(f"ChromeDriver binary not found at: {self.driver_binary}")
-            sys.exit(1)
+    def open_browser_and_wait(self, continue_event=None):
+        print("[INFO] Launching browser before waiting on GUI...")
+        print("🧠 Please complete the CAPTCHA in the browser.")
+        print("⚠️ When ready, click \"Continue (after captcha)\" in the DocketBot GUI.\n")
+
+        time.sleep(2)  # Let user read first
 
         chrome_options = Options()
         chrome_options.binary_location = self.chrome_binary
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--new-window")
 
         service = Service(self.driver_binary)
         self.driver = webdriver.Chrome(service=service, options=chrome_options)
 
-        print('Opening browser to login page...')
         self.driver.set_page_load_timeout(10)
         self.driver.get("https://dw.courts.wa.gov/index.cfm?fa=home.atty&terms=accept&flashform=0")
+        time.sleep(2)
 
-        print("\n*** Please complete the captcha in the browser window. ***")
-        print("*** When done, click 'Continue' in the GUI. ***\n")
-
-        self.ready_event.wait()
+        if continue_event:
+            continue_event.wait()
 
     def scrape_cases(self):
         hide()
@@ -186,16 +178,11 @@ class Scraper:
 def run_main(continue_event=None):
     scraper = Scraper()
 
-    if continue_event is None:
-        scraper.open_browser_and_wait()
+    def browser_then_scrape():
+        scraper.open_browser_and_wait(continue_event)
         scraper.scrape_cases()
-    else:
-        def browser_then_scrape():
-            scraper.open_browser_and_wait()
-            scraper.scrape_cases()
-        threading.Thread(target=browser_then_scrape, daemon=True).start()
-        continue_event.wait()
-        scraper.ready_event.set()
+
+    threading.Thread(target=browser_then_scrape, daemon=True).start()
 
 if __name__ == "__main__":
     run_main()

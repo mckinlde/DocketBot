@@ -90,7 +90,7 @@ def create_overlay(name, case_num, year, sig_path=None, bar_number="00000"):
 
     # Bar number (directly after "WSBA#")
     can.setFont("Helvetica", 10)
-    can.drawString(100, 219, bar_number)
+    can.drawString(105, 215, bar_number)
 
 
     can.save()
@@ -193,8 +193,15 @@ def main(event=None):
         print(f"[DEBUG] Creating overlay for {name} / Bar #{bar_number}")
         base_pdf = PdfReader(template_path)
         page = base_pdf.pages[0]
+
+        # Flatten the form fields (e.g. signature line)
+        if "/Annots" in page:
+            print("[DEBUG] Flattening AcroForm fields on template page...")
+            del page["/Annots"]
+
         overlay = create_overlay(name, cases, year_string, sig_path=sig_path, bar_number=bar_number)
         page.merge_page(overlay)
+
         output_writer.add_page(page)
 
     with open(out_path, "wb") as f:

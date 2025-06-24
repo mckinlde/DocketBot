@@ -47,10 +47,9 @@ def create_overlay(name, case_num, year, sig_path=None, bar_number="00000"):
     year_x, year_y = 356, 394
 
     # Signature + bar fields
-    sig_x, sig_y = 72, 115         # aligned behind "Signature:" line
-    bar_x, bar_y = 390, 102        # aligned next to "WSBA#" field
+    sig_x, sig_y = 72, 115
+    bar_x, bar_y = 390, 102
 
-    # Draw name and year
     can.setFont("Helvetica", 10)
     can.drawString(name_x, name_y, name)
     can.drawString(year_x, year_y, year)
@@ -78,16 +77,17 @@ def create_overlay(name, case_num, year, sig_path=None, bar_number="00000"):
         can.setFont("Helvetica", font_size)
         can.drawString(cases_x, y_offset, line)
 
-    # Signature image
     if sig_path and os.path.exists(sig_path):
         try:
+            print(f"[DEBUG] Adding signature from: {sig_path}")
             from reportlab.lib.utils import ImageReader
             img = ImageReader(sig_path)
             can.drawImage(img, sig_x, sig_y, width=180, preserveAspectRatio=True, mask='auto')
         except Exception as e:
             print(f"[ERROR] Failed to add signature image: {e}")
+    else:
+        print(f"[WARNING] Signature image missing or path invalid: {sig_path}")
 
-    # Bar number
     can.setFont("Helvetica", 10)
     can.drawString(bar_x, bar_y, bar_number)
 
@@ -113,13 +113,12 @@ def parse_case(soup: BeautifulSoup):
     result["Court"] = result.get("Court", "")
     return result
 
-
 def run_browser_and_scrape(event=None):
     print("[INFO] Launching browser before waiting on GUI...")
     print("🧠 Please complete the CAPTCHA in the browser.")
     print("⚠️ When ready, click \"Continue (after captcha)\" in the DocketBot GUI.\n")
     
-    time.sleep(2)  # Let the user read
+    time.sleep(2)
 
     chrome_options = Options()
     chrome_options.binary_location = resource_path(CHROME_PATH)
@@ -157,7 +156,6 @@ def run_browser_and_scrape(event=None):
     driver.quit()
     return case_details
 
-
 def main(event=None):
     config = load_config()
     bar_number = config.get("scraper.bar_number", "00000")
@@ -190,9 +188,10 @@ def main(event=None):
     for group in grouped.values():
         name = group["name"]
         cases = ", ".join(group["case_numbers"])
+        print(f"[DEBUG] Creating overlay for {name} / Bar #{bar_number}")
         base_pdf = PdfReader(template_path)
         page = base_pdf.pages[0]
-        overlay = create_overlay(name, cases, year_string)
+        overlay = create_overlay(name, cases, year_string, sig_path=sig_path, bar_number=bar_number)
         page.merge_page(overlay)
         output_writer.add_page(page)
 

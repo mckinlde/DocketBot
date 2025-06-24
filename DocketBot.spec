@@ -28,6 +28,7 @@ lxml_datas = collect_data_files('lxml')
 datas = [
     ('chrome-win64/*', 'chrome-win64'),
     ('chromedriver-win64/*', 'chromedriver-win64'),
+    ('assets/waiver_template.pdf', 'assets'),
 ] + lxml_datas
 
 binaries = lxml_binaries

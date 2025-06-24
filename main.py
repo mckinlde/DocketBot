@@ -5,8 +5,25 @@ import json
 import threading
 import tkinter as tk
 from tkinter import messagebox, scrolledtext, filedialog, simpledialog
+import requests
 
 APP_NAME = "DocketBot"
+
+def check_license():
+    try:
+        # Replace with your actual license API endpoint
+        # resp = requests.get("https://yourserver.com/api/license", timeout=5)
+        # if resp.status_code != 200:
+        #     raise Exception(f"Status {resp.status_code}")
+        # result = resp.json()
+        # if not result.get("valid", False):
+        #     raise Exception("Invalid license key")
+        # ToDo: uncomment above, make this check real
+        result = { "license_current": True }
+    except Exception as e:
+        from tkinter import messagebox
+        messagebox.showerror("License Error", f"License check failed: {e}")
+        sys.exit(1)
 
 # ✅ Use LOCALAPPDATA for config
 def config_path():
@@ -163,6 +180,7 @@ def run_scraper():
 
 def main():
     ensure_config()
+    check_license()
     if len(sys.argv) > 1 and sys.argv[1].isdigit():
         run_scraper()
     else:

@@ -168,7 +168,12 @@ def run_gui():
     btn_continue.config(state='disabled')
 
     def set_signature_image():
-        img = filedialog.askopenfilename(filetypes=[("Image Files", "*.png;*.jpg;*.jpeg")])
+        img = filedialog.askopenfilename(
+            filetypes=[
+                ("Image Files", "*.png;*.jpg;*.jpeg;*.svg"),
+                ("All Files", "*.*")
+            ]
+        )
         if img:
             config["waiver.signature_image_path"] = img
             save_config(config)

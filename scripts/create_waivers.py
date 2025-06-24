@@ -76,17 +76,21 @@ def create_overlay(name, case_num, year, sig_path=None, bar_number="00000"):
         can.setFont("Helvetica", font_size)
         can.drawString(cases_x, y_offset, line)
 
-        # Signature image
+    # Signature image (fits within field box)
     if sig_path and os.path.exists(sig_path):
         try:
             print(f"[DEBUG] Adding signature from: {sig_path}")
             from reportlab.lib.utils import ImageReader
             img = ImageReader(sig_path)
-            can.drawImage(img, 330, 120, width=150, height=45, preserveAspectRatio=True, mask='auto')
+            can.drawImage(img, 305, 130, width=130, height=40, preserveAspectRatio=True, mask='auto')
         except Exception as e:
             print(f"[ERROR] Failed to add signature image: {e}")
     else:
         print(f"[WARNING] Signature image missing or invalid: {sig_path}")
+
+    # Bar number (aligned to WSBA# label)
+    can.setFont("Helvetica", 10)
+    can.drawString(375, 116, bar_number)
 
     # Bar number
     can.setFont("Helvetica", 10)

@@ -202,6 +202,12 @@ def run_gui():
         waiver_event.set()
 
     tk.Button(tab_waivers, text="Set Signature Image", command=set_signature_image).pack(anchor="w", pady=5)
+    tk.Label(
+        tab_waivers,
+        text="💡 Recommended: Use a transparent .svg for your signature.\nConvert at https://www.pngtosvg.com/",
+        font=("Segoe UI", 8, "italic"),
+        fg="gray"
+    ).pack(anchor="w", padx=5, pady=(0, 10))
     tk.Button(tab_waivers, text="Set Output Folder", command=set_waiver_output).pack(anchor="w", pady=5)
     tk.Button(tab_waivers, text="Open Output Folder", command=lambda: open_folder(config["waiver.waiver_output_dir"])).pack(anchor="w", pady=5)
     btn_waiver_run = tk.Button(tab_waivers, text="Run Waiver Generator", command=run_waiver_generator)

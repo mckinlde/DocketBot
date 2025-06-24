@@ -1,3 +1,5 @@
+# main.py
+
 import subprocess
 import os
 import sys
@@ -5,7 +7,6 @@ import json
 import threading
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext, filedialog, simpledialog
-import requests
 
 APP_NAME = "DocketBot"
 DEFAULT_BAR = "00000"
@@ -72,7 +73,6 @@ class StdoutRedirector:
 
 def open_folder(path):
     path = os.path.realpath(path)
-    print(f"[DEBUG] Opening folder: {path}")
     if os.path.exists(path) and os.path.isdir(path):
         if os.name == 'nt':
             subprocess.run(f'explorer "{path}"', shell=True)
@@ -186,12 +186,22 @@ def run_gui():
         if not os.path.isdir(output_path):
             messagebox.showerror("Error", f"Waiver output folder not found:\n{output_path}")
             return
-        threading.Thread(target=lambda: __import__('scripts.create_waivers').create_waivers.main(), daemon=True).start()
+        btn_waiver_run.config(state='disabled')
+        btn_waiver_continue.config(state='normal')
+        threading.Thread(target=lambda: __import__('scripts.create_waivers').create_waivers.main(waiver_event), daemon=True).start()
+
+    def continue_waivers():
+        print("\n[INFO] User clicked Continue (Waiver Captcha)\n")
+        waiver_event.set()
 
     tk.Button(tab_waivers, text="Set Signature Image", command=set_signature_image).pack(anchor="w", pady=5)
     tk.Button(tab_waivers, text="Set Output Folder", command=set_waiver_output).pack(anchor="w", pady=5)
     tk.Button(tab_waivers, text="Open Output Folder", command=lambda: open_folder(config["waiver.waiver_output_dir"])).pack(anchor="w", pady=5)
-    tk.Button(tab_waivers, text="Run Waiver Generator", command=run_waiver_generator).pack(anchor="w", pady=10)
+    btn_waiver_run = tk.Button(tab_waivers, text="Run Waiver Generator", command=run_waiver_generator)
+    btn_waiver_run.pack(anchor="w", pady=5)
+    btn_waiver_continue = tk.Button(tab_waivers, text="Continue (after captcha)", command=continue_waivers)
+    btn_waiver_continue.pack(anchor="w", pady=5)
+    btn_waiver_continue.config(state='disabled')
 
     output_box = scrolledtext.ScrolledText(root, state='disabled', width=80, height=12, wrap='word')
     output_box.pack(pady=15)
@@ -199,6 +209,7 @@ def run_gui():
     sys.stderr = StdoutRedirector(output_box)
 
     continue_event = threading.Event()
+    waiver_event = threading.Event()
     root.mainloop()
 
 def main():

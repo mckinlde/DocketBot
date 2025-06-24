@@ -170,8 +170,7 @@ def run_gui():
     def set_signature_image():
         img = filedialog.askopenfilename(
             filetypes=[
-                ("Image Files", "*.png;*.jpg;*.jpeg;*.svg"),
-                ("All Files", "*.*")
+                ("Image Files", "*.png;*.jpg;*.jpeg;")
             ]
         )
         if img:
@@ -209,7 +208,7 @@ def run_gui():
     tk.Button(tab_waivers, text="Set Signature Image", command=set_signature_image).pack(anchor="w", pady=5)
     tk.Label(
         tab_waivers,
-        text="💡 Recommended: Use a transparent .svg for your signature.\nConvert at https://www.pngtosvg.com/",
+        text="💡 Recommended: Use a transparent .png for your signature.",
         font=("Segoe UI", 8, "italic"),
         fg="gray"
     ).pack(anchor="w", padx=5, pady=(0, 10))

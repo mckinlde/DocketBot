@@ -122,7 +122,7 @@ def main(event=None):
     bar_number = config.get("scraper.bar_number", "00000")
     sig_path = config.get("waiver.signature_image_path")
     output_dir = config.get("waiver.waiver_output_dir")
-    template_path = resource_path(f"assets/Waiver {bar_number} PDF.pdf")
+    template_path = resource_path("assets/waiver_template.pdf")
 
     if not os.path.exists(template_path):
         print(f"[ERROR] Template not found: {template_path}")

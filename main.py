@@ -148,7 +148,10 @@ def run_gui():
     def run_scraper():
         btn_scrape.config(state='disabled')
         btn_continue.config(state='normal')
-        threading.Thread(target=lambda: __import__('scripts.scrape_cases').scrape_cases.run_main(continue_event), daemon=True).start()
+        def target():
+            import scripts.scrape_cases as scrape_cases
+            scrape_cases.run_main(continue_event)
+        threading.Thread(target=target, daemon=True).start()
 
     def continue_scraping():
         print("\n[INFO] User clicked Continue\n")
@@ -188,7 +191,10 @@ def run_gui():
             return
         btn_waiver_run.config(state='disabled')
         btn_waiver_continue.config(state='normal')
-        threading.Thread(target=lambda: __import__('scripts.create_waivers').create_waivers.main(waiver_event), daemon=True).start()
+        def target():
+            import scripts.create_waivers as create_waivers
+            create_waivers.main(waiver_event)
+        threading.Thread(target=target, daemon=True).start()
 
     def continue_waivers():
         print("\n[INFO] User clicked Continue (Waiver Captcha)\n")

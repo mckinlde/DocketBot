@@ -1,5 +1,3 @@
-# scripts/create_waivers.py
-
 import os
 import sys
 import time
@@ -22,10 +20,9 @@ CHROME_PATH = "chrome-win64/chrome.exe"
 CHROMEDRIVER_PATH = "chromedriver-win64/chromedriver.exe"
 MAX_CASE_WIDTH = 220
 
-def resource_path(rel_path):
-    if hasattr(sys, '_MEIPASS'):
-        return os.path.join(sys._MEIPASS, rel_path)
-    return os.path.abspath(rel_path)
+def resource_path(path):
+    base = getattr(sys, "_MEIPASS", os.path.abspath("."))
+    return os.path.join(base, path)
 
 def load_config():
     path = os.path.join(os.environ["LOCALAPPDATA"], "DocketBot", "config.json")
@@ -96,11 +93,19 @@ def parse_case(soup: BeautifulSoup):
     result["Court"] = result.get("Court", "")
     return result
 
-def run_browser_and_scrape(event):
+def run_browser_and_scrape(event=None):
+    print("[INFO] Launching browser before waiting on GUI...")
+    print("🧠 Please complete the CAPTCHA in the browser.")
+    print("⚠️ When ready, click \"Continue (after captcha)\" in the DocketBot GUI.\n")
+    
+    time.sleep(2)  # Let the user read
+
     chrome_options = Options()
     chrome_options.binary_location = resource_path(CHROME_PATH)
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--new-window")
+    # chrome_options.add_argument("--window-position=1000,1000")  # Optional: launch off-center
 
     driver = webdriver.Chrome(service=Service(resource_path(CHROMEDRIVER_PATH)), options=chrome_options)
     driver.set_page_load_timeout(10)
@@ -109,28 +114,8 @@ def run_browser_and_scrape(event):
     driver.get("https://dw.courts.wa.gov/index.cfm?fa=home.atty&terms=accept&flashform=0")
     time.sleep(2)
 
-    print('🧠 Please complete the CAPTCHA in the browser.')
-    print('⚠️ When ready, click "Continue (after captcha)" in the DocketBot GUI.')
-    event.wait()  # Wait here until GUI releases the pause
-
-    driver.refresh()
-    time.sleep(3)
-    html = driver.page_source
-    soup = BeautifulSoup(html, "lxml")
-
-    case_soups = soup.find_all("div", class_="dw-search-result std-vertical-med-margin dw-cal-search-result")
-    print(f"Found {len(case_soups)} cases (before filtering)...")
-
-    case_details = []
-    for case_soup in case_soups:
-        parsed = parse_case(case_soup)
-        if parsed.get("Court", "").strip().upper() != "SUNNYSIDE MUNICIPAL":
-            continue
-        case_details.append(parsed)
-
-    print(f"🧾 Filtered to {len(case_details)} Sunnyside cases.")
-    driver.quit()
-    return case_details
+    if event:
+        event.wait()
 
 def main(event=None):
     config = load_config()
@@ -139,22 +124,19 @@ def main(event=None):
     output_dir = config.get("waiver.waiver_output_dir")
     template_path = resource_path(f"assets/Waiver {bar_number} PDF.pdf")
 
+    if not os.path.exists(template_path):
+        print(f"[ERROR] Template not found: {template_path}")
+        return
+
     today = datetime.now()
     date_string = today.strftime('%Y-%m-%d')
     year_string = today.strftime('%y')
     out_path = os.path.join(output_dir, f"{date_string} {bar_number}.pdf")
     os.makedirs(output_dir, exist_ok=True)
 
-    if event:
-        print("[INFO] Launching browser before waiting on GUI...")
-        case_details = run_browser_and_scrape(event)
-    else:
-        print("[INFO] No event provided, running standalone.")
-        dummy = threading.Event()
-        dummy.set()
-        case_details = run_browser_and_scrape(dummy)
-
+    case_details = run_browser_and_scrape(event)
     grouped = {}
+
     for case in case_details:
         raw_name = case.get("Client Name", "Unknown")
         case_num = case.get("Case Number", "NoCaseNumber")
@@ -178,5 +160,4 @@ def main(event=None):
     print(f"\n✅ Waiver PDF generated: {out_path}")
 
 if __name__ == "__main__":
-    import threading
     main()

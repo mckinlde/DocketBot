@@ -1,3 +1,5 @@
+# scripts/create_waivers.py
+
 import os
 import sys
 import time
@@ -12,12 +14,10 @@ from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
 from PyPDF2 import PdfReader, PdfWriter
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 
-# === Constants ===
 CHROME_PATH = "chrome-win64/chrome.exe"
 CHROMEDRIVER_PATH = "chromedriver-win64/chromedriver.exe"
 MAX_CASE_WIDTH = 220
@@ -96,7 +96,7 @@ def parse_case(soup: BeautifulSoup):
     result["Court"] = result.get("Court", "")
     return result
 
-def run_browser_and_scrape():
+def run_browser_and_scrape(event):
     chrome_options = Options()
     chrome_options.binary_location = resource_path(CHROME_PATH)
     chrome_options.add_argument("--no-sandbox")
@@ -111,29 +111,7 @@ def run_browser_and_scrape():
 
     print('🧠 Please complete the CAPTCHA in the browser.')
     print('⚠️ When ready, click "Continue (after captcha)" in the DocketBot GUI.')
-    # GUI will handle waiver_event and refresh
-
-    # Wait for GUI to trigger refresh
-    return driver
-
-def main(event=None):
-    config = load_config()
-    bar_number = config.get("scraper.bar_number", "00000")
-    sig_path = config.get("waiver.signature_image_path")
-    output_dir = config.get("waiver.waiver_output_dir")
-    template_path = resource_path(f"assets/Waiver {bar_number} PDF.pdf")
-
-    today = datetime.now()
-    date_string = today.strftime('%Y-%m-%d')
-    year_string = today.strftime('%y')
-    out_path = os.path.join(output_dir, f"{date_string} {bar_number}.pdf")
-    os.makedirs(output_dir, exist_ok=True)
-
-    if event:
-        print("[INFO] Waiting for GUI to release event...")
-        event.wait()
-
-    driver = run_browser_and_scrape()
+    event.wait()  # Wait here until GUI releases the pause
 
     driver.refresh()
     time.sleep(3)
@@ -152,6 +130,29 @@ def main(event=None):
 
     print(f"🧾 Filtered to {len(case_details)} Sunnyside cases.")
     driver.quit()
+    return case_details
+
+def main(event=None):
+    config = load_config()
+    bar_number = config.get("scraper.bar_number", "00000")
+    sig_path = config.get("waiver.signature_image_path")
+    output_dir = config.get("waiver.waiver_output_dir")
+    template_path = resource_path(f"assets/Waiver {bar_number} PDF.pdf")
+
+    today = datetime.now()
+    date_string = today.strftime('%Y-%m-%d')
+    year_string = today.strftime('%y')
+    out_path = os.path.join(output_dir, f"{date_string} {bar_number}.pdf")
+    os.makedirs(output_dir, exist_ok=True)
+
+    if event:
+        print("[INFO] Launching browser before waiting on GUI...")
+        case_details = run_browser_and_scrape(event)
+    else:
+        print("[INFO] No event provided, running standalone.")
+        dummy = threading.Event()
+        dummy.set()
+        case_details = run_browser_and_scrape(dummy)
 
     grouped = {}
     for case in case_details:
@@ -177,4 +178,5 @@ def main(event=None):
     print(f"\n✅ Waiver PDF generated: {out_path}")
 
 if __name__ == "__main__":
+    import threading
     main()

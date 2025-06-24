@@ -1,6 +1,18 @@
 # DocketBot.spec — Onefile Build
 # Run with: pyinstaller DocketBot.spec
 
+# .spec File = PyInstaller Build Recipe
+# Used by PyInstaller
+
+# Bundles your Python app into a Windows .exe
+
+# Controls:
+#     Included files (e.g., chrome-win64, config.json, icons)
+#     Hidden imports (like bs4, selenium)
+#     Onefile vs. onedir build modes
+#     Output executable name (DocketBot.exe)
+
+
 from PyInstaller.utils.hooks import collect_submodules, collect_dynamic_libs, collect_data_files
 import os
 

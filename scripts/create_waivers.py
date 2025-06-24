@@ -1,156 +1,97 @@
-import os
-import json
-import time
-import unicodedata
-import re
-from datetime import datetime
-from io import BytesIO
-from collections import defaultdict
+# scripts/create_waivers.py
 
-from selenium import webdriver
-from bs4 import BeautifulSoup
-from pdfrw import PdfReader, PdfWriter, PageMerge
+import os
+import sys
+import json
+import datetime
+import threading
+from PyPDF2 import PdfReader, PdfWriter
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
-from PIL import Image
-
-CONFIG_PATH = os.path.join(os.environ["LOCALAPPDATA"], "DocketBot", "config.json")
-TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "..", "assets", "Waiver PDF Form with bar number and signature.pdf")
-CHROME_DRIVER_PATH = os.path.join(os.path.dirname(__file__), "..", "chromedriver-win64", "chromedriver.exe")
+from reportlab.lib.utils import ImageReader
+from io import BytesIO
 
 def load_config():
-    with open(CONFIG_PATH, "r") as f:
+    config_path = os.path.join(os.environ["LOCALAPPDATA"], "DocketBot", "config.json")
+    with open(config_path, "r") as f:
         return json.load(f)
 
-def normalize_for_grouping(name):
-    name = unicodedata.normalize('NFKD', name).encode('ASCII', 'ignore').decode()
-    name = re.sub(r'\b(jr|sr|ii|iii|iv|v)\b\.?', '', name, flags=re.IGNORECASE)
-    return re.sub(r'[^a-z]', '', name.lower())
-
-def ensure_folder(path):
-    if not os.path.exists(path):
-        os.makedirs(path)
-        print(f"Created folder: {path}")
-
-def create_overlay(name, case_str, year, signature_path):
+def generate_overlay(signature_path, client_name, case_number):
     packet = BytesIO()
     can = canvas.Canvas(packet, pagesize=letter)
 
-    name_x, name_y = 60, 648
-    case_x, case_y = 350, 643
-    year_x, year_y = 356, 394
-    sig_x, sig_y = 360, 428
-    sig_width = 120
+    # Example positions — adjust to match your waiver PDF template
+    can.drawString(100, 650, f"Client: {client_name}")
+    can.drawString(100, 630, f"Case: {case_number}")
+    can.drawString(100, 610, f"Date: {datetime.date.today().strftime('%Y-%m-%d')}")
 
-    # Add text fields
-    can.setFont("Helvetica", 10)
-    can.drawString(name_x, name_y, name)
-    can.drawString(year_x, year_y, year)
-
-    # Handle case wrapping
-    case_nums = case_str.split(", ")
-    current_line = ""
-    lines = []
-    max_width = 220
-    for num in case_nums:
-        test = current_line + (", " if current_line else "") + num
-        if can.stringWidth(test, "Helvetica", 10) <= max_width:
-            current_line = test
-        else:
-            lines.append(current_line)
-            current_line = num
-    if current_line:
-        lines.append(current_line)
-    font_size = 10 if len(lines) <= 2 else 9 if len(lines) <= 3 else 8
-    for i, line in enumerate(lines):
-        y_offset = case_y - i * (font_size + 2)
-        can.setFont("Helvetica", font_size)
-        can.drawString(case_x, y_offset, line)
+    if os.path.isfile(signature_path):
+        try:
+            img = ImageReader(signature_path)
+            can.drawImage(img, 100, 560, width=150, preserveAspectRatio=True, mask='auto')
+        except Exception as e:
+            print(f"[ERROR] Failed to embed signature: {e}")
 
     can.save()
     packet.seek(0)
-    overlay = PdfReader(packet).pages[0]
+    return PdfReader(packet)
 
-    if os.path.exists(signature_path):
-        sig_img = Image.open(signature_path)
-        sig_buffer = BytesIO()
-        sig_img.save(sig_buffer, format="PNG")
-        sig_buffer.seek(0)
-
-        sig_pdf = BytesIO()
-        sig_can = canvas.Canvas(sig_pdf, pagesize=letter)
-        sig_can.drawImage(sig_buffer, sig_x, sig_y, width=sig_width, preserveAspectRatio=True, mask='auto')
-        sig_can.save()
-        sig_pdf.seek(0)
-
-        sig_overlay = PdfReader(sig_pdf).pages[0]
-        PageMerge(overlay).add(sig_overlay).render()
-
-    return overlay
-
-def parse_case(soup):
-    result = {}
-    name_div = soup.find("div", class_="dw-icon-row")
-    if name_div:
-        result["Client Name"] = name_div.find_all("div")[-1].text.strip()
+def create_waiver_page(template_path, signature_path, client_name, case_number):
     try:
-        result["Appointment Date"] = f"{soup.find('div', class_='dw-cal-result-month').text.strip()} {soup.find('div', class_='dw-cal-result-day').text.strip()}, {soup.find('div', class_='dw-cal-result-year').text.strip()}"
-    except:
-        result["Appointment Date"] = None
+        base_pdf = PdfReader(template_path)
+        overlay_pdf = generate_overlay(signature_path, client_name, case_number)
 
-    for item in soup.find_all("div", class_="dw-cal-result-item"):
-        label = item.find("div", class_="dw-cal-result-label").text.strip(": ")
-        data = item.find("div", class_="dw-cal-result-data").text.strip()
-        if label == "Case Number":
-            data = data.split()[0]
-        result[label] = data
-    return result
+        writer = PdfWriter()
+        page = base_pdf.pages[0]
+        page.merge_page(overlay_pdf.pages[0])
+        writer.add_page(page)
 
-def main(continue_event=None):
+        output = BytesIO()
+        writer.write(output)
+        output.seek(0)
+        return PdfReader(output).pages[0]
+    except Exception as e:
+        print(f"[ERROR] Failed to create waiver for {client_name} / {case_number}: {e}")
+        return None
+
+def main(waiver_event=None):
     config = load_config()
-    sig_path = config["waiver.signature_image_path"]
-    out_dir = config["waiver.waiver_output_dir"]
+    sig_path = config.get("waiver.signature_image_path")
+    output_dir = config.get("waiver.waiver_output_dir")
+    bar = config.get("scraper.bar_number")
 
-    ensure_folder(out_dir)
+    csv_path = os.path.join(config["scraper.destination_folder"], f"{bar}_Cases.csv")
+    template_path = os.path.join(os.path.expanduser("~"), "Desktop", f"Waiver {bar}.pdf")
 
-    driver = webdriver.Chrome(CHROME_DRIVER_PATH)
-    driver.get("https://dw.courts.wa.gov/index.cfm?fa=home.atty&terms=accept&flashform=0")
+    if not os.path.isfile(csv_path):
+        print(f"[ERROR] Case CSV not found: {csv_path}")
+        return
+    if not os.path.isfile(template_path):
+        print(f"[ERROR] Template PDF not found: {template_path}")
+        return
 
-    print("[INFO] Please complete captcha for waiver generation.")
-    if continue_event:
-        continue_event.wait()
-        continue_event.clear()
+    if waiver_event:
+        print("\n*** Waiting for user to click 'Continue' in GUI before generating waivers... ***\n")
+        waiver_event.wait()
 
-    print("[INFO] Scraping waiver-eligible cases...")
-
-    soup = BeautifulSoup(driver.page_source, "lxml")
-    cases = []
-    for case_soup in soup.find_all("div", class_="dw-search-result std-vertical-med-margin dw-cal-search-result"):
-        data = parse_case(case_soup)
-        if data.get("Court") == "SUNNYSIDE MUNICIPAL":
-            cases.append(data)
-
-    print(f"[INFO] {len(cases)} Sunnyside Municipal cases found.")
-
-    grouped = defaultdict(list)
-    for case in cases:
-        name = case.get("Client Name", "Unknown")
-        num = case.get("Case Number", "NoCaseNumber")
-        key = normalize_for_grouping(name)
-        grouped[key].append((name, num))
+    from PyPDF2 import PdfWriter
 
     writer = PdfWriter()
-    year = datetime.now().strftime("%y")
-    for group in grouped.values():
-        name, _ = group[0]
-        case_nums = ", ".join(sorted(set(n for _, n in group)))
-        template = PdfReader(TEMPLATE_PATH).pages[0]
-        overlay = create_overlay(name, case_nums, year, sig_path)
-        PageMerge(template).add(overlay).render()
-        writer.addpage(template)
+    with open(csv_path, "r", encoding="utf-7") as f:
+        lines = f.readlines()[1:]  # Skip header
+        for line in lines:
+            fields = line.strip().split(",")
+            if len(fields) >= 2:
+                client_name, case_number = fields[0].strip(), fields[1].strip()
+                page = create_waiver_page(template_path, sig_path, client_name, case_number)
+                if page:
+                    writer.add_page(page)
 
-    outfile = os.path.join(out_dir, f"{datetime.now().strftime('%Y-%m-%d')} Waivers.pdf")
-    writer.write(outfile)
-    print(f"\n✅ Waiver PDF generated: {outfile}")
-    input("Press Enter to finish...")
-    driver.quit()
+    date_str = datetime.date.today().strftime("%Y-%m-%d")
+    outfile = os.path.join(output_dir, f"{date_str} {bar}.pdf")
+    with open(outfile, "wb") as f_out:
+        writer.write(f_out)
+    print(f"\n✅ Waiver PDF created: {outfile}")
+
+if __name__ == "__main__":
+    main()

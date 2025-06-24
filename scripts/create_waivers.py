@@ -110,10 +110,33 @@ def run_browser_and_scrape():
     time.sleep(2)
 
     print('🧠 Please complete the CAPTCHA in the browser.')
-    input('✅ When done, press Enter to continue...')
+    print('⚠️ When ready, click "Continue (after captcha)" in the DocketBot GUI.')
+    # GUI will handle waiver_event and refresh
+
+    # Wait for GUI to trigger refresh
+    return driver
+
+def main(event=None):
+    config = load_config()
+    bar_number = config.get("scraper.bar_number", "00000")
+    sig_path = config.get("waiver.signature_image_path")
+    output_dir = config.get("waiver.waiver_output_dir")
+    template_path = resource_path(f"assets/Waiver {bar_number} PDF.pdf")
+
+    today = datetime.now()
+    date_string = today.strftime('%Y-%m-%d')
+    year_string = today.strftime('%y')
+    out_path = os.path.join(output_dir, f"{date_string} {bar_number}.pdf")
+    os.makedirs(output_dir, exist_ok=True)
+
+    if event:
+        print("[INFO] Waiting for GUI to release event...")
+        event.wait()
+
+    driver = run_browser_and_scrape()
+
     driver.refresh()
     time.sleep(3)
-
     html = driver.page_source
     soup = BeautifulSoup(html, "lxml")
 
@@ -129,28 +152,8 @@ def run_browser_and_scrape():
 
     print(f"🧾 Filtered to {len(case_details)} Sunnyside cases.")
     driver.quit()
-    return case_details
 
-def main(event=None):
-    if event:
-        print("\n[INFO] Waiting for GUI to release event...")
-        event.wait()
-
-    config = load_config()
-    bar_number = config.get("scraper.bar_number", "00000")
-    sig_path = config.get("waiver.signature_image_path")
-    output_dir = config.get("waiver.waiver_output_dir")
-    template_path = resource_path(f"assets/Waiver {bar_number} PDF.pdf")
-
-    today = datetime.now()
-    date_string = today.strftime('%Y-%m-%d')
-    year_string = today.strftime('%y')
-    out_path = os.path.join(output_dir, f"{date_string} {bar_number}.pdf")
-    os.makedirs(output_dir, exist_ok=True)
-
-    case_details = run_browser_and_scrape()
     grouped = {}
-
     for case in case_details:
         raw_name = case.get("Client Name", "Unknown")
         case_num = case.get("Case Number", "NoCaseNumber")

@@ -4,56 +4,58 @@ import sys
 import json
 import threading
 import tkinter as tk
-from tkinter import messagebox, scrolledtext, filedialog, simpledialog
+from tkinter import ttk, messagebox, scrolledtext, filedialog, simpledialog
 import requests
 
 APP_NAME = "DocketBot"
+DEFAULT_BAR = "00000"
 
-def check_license():
-    try:
-        # Replace with your actual license API endpoint
-        # resp = requests.get("https://yourserver.com/api/license", timeout=5)
-        # if resp.status_code != 200:
-        #     raise Exception(f"Status {resp.status_code}")
-        # result = resp.json()
-        # if not result.get("valid", False):
-        #     raise Exception("Invalid license key")
-        # ToDo: uncomment above, make this check real
-        result = { "license_current": True }
-    except Exception as e:
-        from tkinter import messagebox
-        messagebox.showerror("License Error", f"License check failed: {e}")
-        sys.exit(1)
+CONFIG_KEYS = {
+    "scraper.bar_number": DEFAULT_BAR,
+    "scraper.destination_folder": os.path.join(os.path.expanduser("~"), "Desktop", f"{DEFAULT_BAR} Misdemeanor Clients"),
+    "waiver.waiver_output_dir": os.path.join(os.path.expanduser("~"), "Desktop", f"{DEFAULT_BAR} Misdemeanor Waivers"),
+    "waiver.signature_image_path": os.path.join(os.path.expanduser("~"), "Desktop", "signature.png")
+}
 
-# ✅ Use LOCALAPPDATA for config
 def config_path():
     return os.path.join(os.environ["LOCALAPPDATA"], APP_NAME, "config.json")
 
-def default_desktop_path():
-    return os.path.join(os.path.expanduser("~"), "Desktop", "00000 Misdemeanor Clients")
-
-# ✅ Initialize config in LOCALAPPDATA
 def ensure_config():
     path = config_path()
-    config = {
-        "bar_number": "00000",
-        "destination_folder": default_desktop_path()
-    }
-
     os.makedirs(os.path.dirname(path), exist_ok=True)
-
     if os.path.exists(path):
-        try:
-            with open(path, "r") as f:
-                existing = json.load(f)
-                config.update(existing)
-        except:
-            pass
+        with open(path, "r") as f:
+            data = json.load(f)
+    else:
+        data = {}
+    updated = False
+    for key, default in CONFIG_KEYS.items():
+        if key not in data:
+            data[key] = default
+            updated = True
+    if updated:
+        with open(path, "w") as f:
+            json.dump(data, f, indent=2)
+    return data
 
-    with open(path, "w") as f:
+def save_config(config):
+    with open(config_path(), "w") as f:
         json.dump(config, f, indent=2)
 
-    return config
+def load_config():
+    with open(config_path(), "r") as f:
+        return json.load(f)
+
+def reset_config():
+    bar = CONFIG_KEYS["scraper.bar_number"]
+    updated_config = {
+        "scraper.bar_number": bar,
+        "scraper.destination_folder": os.path.join(os.path.expanduser("~"), "Desktop", f"{bar} Misdemeanor Clients"),
+        "waiver.waiver_output_dir": os.path.join(os.path.expanduser("~"), "Desktop", f"{bar} Misdemeanor Waivers"),
+        "waiver.signature_image_path": CONFIG_KEYS["waiver.signature_image_path"]
+    }
+    save_config(updated_config)
+    return updated_config
 
 class StdoutRedirector:
     def __init__(self, text_widget):
@@ -74,117 +76,134 @@ def open_folder(path):
     if os.path.exists(path) and os.path.isdir(path):
         if os.name == 'nt':
             subprocess.run(f'explorer "{path}"', shell=True)
-        elif os.name == 'posix':
+        else:
             subprocess.run(["xdg-open", path])
     else:
         messagebox.showerror("Error", f"Folder does not exist:\n{path}")
 
 def run_gui():
-    path = config_path()
     config = ensure_config()
 
-    def save_config():
-        with open(path, "w") as f:
-            json.dump(config, f, indent=2)
-        print(f"[DEBUG] Saved config: {config}")
+    def reload_config():
+        nonlocal config
+        config = load_config()
+        update_settings_tab()
+
+    def perform_reset():
+        result = messagebox.askyesno("Reset Config", "Are you sure you want to reset all settings to defaults?")
+        if result:
+            nonlocal config
+            config = reset_config()
+            update_settings_tab()
 
     root = tk.Tk()
     root.title("DocketBot")
     root.configure(padx=20, pady=20)
     root.resizable(False, False)
 
-    # === Bar Number Display ===
-    bar_frame = tk.Frame(root)
-    bar_frame.pack(anchor="w", pady=(0, 5))
+    notebook = ttk.Notebook(root)
+    notebook.pack(fill='both', expand=True)
 
-    label_bar = tk.Label(bar_frame, text=f"Bar Number: {config['bar_number']}", font=("Segoe UI", 11, "bold"))
-    label_bar.pack(anchor="w")
+    tab_settings = tk.Frame(notebook)
+    tab_scraper = tk.Frame(notebook)
+    tab_waivers = tk.Frame(notebook)
+
+    notebook.add(tab_settings, text='Settings')
+    notebook.add(tab_scraper, text='Scrape Cases')
+    notebook.add(tab_waivers, text='Generate Waivers')
+
+    settings_labels = []
+
+    def update_settings_tab():
+        for label in settings_labels:
+            label.destroy()
+        settings_labels.clear()
+        tk.Label(tab_settings, text="Configuration Settings (read-only)", font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=5)
+        for key in sorted(CONFIG_KEYS):
+            lbl = tk.Label(tab_settings, text=f"{key}: {config.get(key, '')}", font=("Segoe UI", 10))
+            lbl.pack(anchor="w")
+            settings_labels.append(lbl)
+        tk.Label(tab_settings, text="\nTo edit settings, switch to the corresponding feature tab.", font=("Segoe UI", 9, "italic"), fg="gray").pack(anchor="w", pady=10)
+        tk.Button(tab_settings, text="Refresh Settings", command=reload_config).pack(anchor="w", pady=5)
+        tk.Button(tab_settings, text="Reset to Defaults", command=perform_reset).pack(anchor="w", pady=5)
+
+    update_settings_tab()
 
     def change_bar_number():
         new_bar = simpledialog.askstring("Change Bar Number", "Enter new Bar Number:", parent=root)
         if new_bar:
-            config["bar_number"] = new_bar
-            label_bar.config(text=f"Bar Number: {new_bar}")
-            save_config()
+            config["scraper.bar_number"] = new_bar
+            config["scraper.destination_folder"] = os.path.join(os.path.expanduser("~"), "Desktop", f"{new_bar} Misdemeanor Clients")
+            config["waiver.waiver_output_dir"] = os.path.join(os.path.expanduser("~"), "Desktop", f"{new_bar} Misdemeanor Waivers")
+            save_config(config)
+            reload_config()
 
-    tk.Button(bar_frame, text="Change Bar Number", command=change_bar_number).pack(anchor="w", pady=2)
+    def change_dest_folder():
+        folder = filedialog.askdirectory(title="Select base folder")
+        if folder:
+            config["scraper.destination_folder"] = folder
+            save_config(config)
+            reload_config()
 
-    # === Destination Folder Display ===
-    dest_frame = tk.Frame(root)
-    dest_frame.pack(anchor="w", pady=(10, 5))
+    def run_scraper():
+        btn_scrape.config(state='disabled')
+        btn_continue.config(state='normal')
+        threading.Thread(target=lambda: __import__('scripts.scrape_cases').scrape_cases.run_main(continue_event), daemon=True).start()
 
-    label_dest = tk.Label(dest_frame, text=f"Destination Folder: {config['destination_folder']}", font=("Segoe UI", 10))
-    label_dest.pack(anchor="w")
+    def continue_scraping():
+        print("\n[INFO] User clicked Continue\n")
+        continue_event.set()
 
-    def change_folder():
-        base_folder = filedialog.askdirectory(title="Select base folder")
-        if base_folder and config.get("bar_number"):
-            final_folder = os.path.join(base_folder, f"{config['bar_number']} Misdemeanor Clients")
-            config["destination_folder"] = final_folder
-            label_dest.config(text=f"Destination Folder: {final_folder}")
-            save_config()
+    tk.Button(tab_scraper, text="Change Bar Number", command=change_bar_number).pack(anchor="w", pady=5)
+    tk.Button(tab_scraper, text="Change Destination Folder", command=change_dest_folder).pack(anchor="w", pady=5)
+    tk.Button(tab_scraper, text="Open Folder", command=lambda: open_folder(config["scraper.destination_folder"])).pack(anchor="w", pady=5)
+    btn_scrape = tk.Button(tab_scraper, text="Start Scraper", command=run_scraper)
+    btn_scrape.pack(anchor="w", pady=5)
+    btn_continue = tk.Button(tab_scraper, text="Continue (after captcha)", command=continue_scraping)
+    btn_continue.pack(anchor="w", pady=5)
+    btn_continue.config(state='disabled')
 
-    buttons_row = tk.Frame(dest_frame)
-    buttons_row.pack(anchor="w", pady=2)
+    def set_signature_image():
+        img = filedialog.askopenfilename(filetypes=[("Image Files", "*.png;*.jpg;*.jpeg")])
+        if img:
+            config["waiver.signature_image_path"] = img
+            save_config(config)
+            reload_config()
 
-    tk.Button(buttons_row, text="Change Folder", command=change_folder).pack(side="left", padx=(0, 10))
-    tk.Button(buttons_row, text="Open Folder", command=lambda: open_folder(config["destination_folder"])).pack(side="left")
+    def set_waiver_output():
+        folder = filedialog.askdirectory(title="Select output folder")
+        if folder:
+            config["waiver.waiver_output_dir"] = folder
+            save_config(config)
+            reload_config()
 
-    # === Output Box ===
+    def run_waiver_generator():
+        sig_path = config.get("waiver.signature_image_path")
+        output_path = config.get("waiver.waiver_output_dir")
+        if not os.path.exists(sig_path):
+            messagebox.showerror("Error", f"Signature image not found:\n{sig_path}")
+            return
+        if not os.path.isdir(output_path):
+            messagebox.showerror("Error", f"Waiver output folder not found:\n{output_path}")
+            return
+        threading.Thread(target=lambda: __import__('scripts.create_waivers').create_waivers.main(), daemon=True).start()
+
+    tk.Button(tab_waivers, text="Set Signature Image", command=set_signature_image).pack(anchor="w", pady=5)
+    tk.Button(tab_waivers, text="Set Output Folder", command=set_waiver_output).pack(anchor="w", pady=5)
+    tk.Button(tab_waivers, text="Open Output Folder", command=lambda: open_folder(config["waiver.waiver_output_dir"])).pack(anchor="w", pady=5)
+    tk.Button(tab_waivers, text="Run Waiver Generator", command=run_waiver_generator).pack(anchor="w", pady=10)
+
     output_box = scrolledtext.ScrolledText(root, state='disabled', width=80, height=12, wrap='word')
-    output_box.pack(pady=15, expand=False)
-
+    output_box.pack(pady=15)
     sys.stdout = StdoutRedirector(output_box)
     sys.stderr = StdoutRedirector(output_box)
 
     continue_event = threading.Event()
-
-    def run_script():
-        try:
-            btn_run.config(state='disabled')
-            btn_continue.config(state='normal')
-            os.makedirs(config["destination_folder"], exist_ok=True)
-
-            def target():
-                from scripts.scrape_cases import run_main
-                run_main(continue_event=continue_event)
-
-            threading.Thread(target=target, daemon=True).start()
-
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to run scraper: {e}")
-            btn_run.config(state='normal')
-            btn_continue.config(state='disabled')
-
-    def continue_scrape():
-        btn_continue.config(state='disabled')
-        print("\nUser clicked Continue: proceeding with scraping...\n")
-        continue_event.set()
-
-    # === Control Buttons ===
-    controls_frame = tk.Frame(root)
-    controls_frame.pack(pady=10)
-
-    btn_run = tk.Button(controls_frame, text="Start", width=20, command=run_script)
-    btn_run.pack(side="left", padx=10)
-
-    btn_continue = tk.Button(controls_frame, text="Continue (after captcha)", width=30, command=continue_scrape)
-    btn_continue.pack(side="left", padx=10)
-    btn_continue.config(state='disabled')
-
     root.mainloop()
-
-def run_scraper():
-    from scripts.scrape_cases import run_main
-    run_main()
 
 def main():
     ensure_config()
-    check_license()
-    if len(sys.argv) > 1 and sys.argv[1].isdigit():
-        run_scraper()
-    else:
-        run_gui()
+    run_gui()
 
 if __name__ == "__main__":
     main()

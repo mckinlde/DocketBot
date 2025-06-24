@@ -12,6 +12,9 @@ if (-not $env:VIRTUAL_ENV) {
     Write-Host "Virtual environment already activated."
 }
 
+Write-Host "Installing dependencies from requirements.txt..."
+pip install -r requirements.txt
+
 Write-Host "Freezing pip dependencies..."
 pip freeze > requirements.txt
 

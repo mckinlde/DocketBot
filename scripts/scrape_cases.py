@@ -8,12 +8,30 @@ from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
+import threading
+
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-import threading
+"""
+CONFIGURATION
+-------------
+This script loads the following values from `config.json`:
+
+- "bar_number": (str) The attorney's WSBA bar number. 
+                Used for logging into dw.courts.wa.gov and naming output files.
+
+- "destination_folder": (str) Absolute or relative path to the folder 
+                        where client case folders and CSVs will be created.
+
+Example `config.json`:
+{
+    "bar_number": "12345",
+    "destination_folder": "C:/Users/YourName/Desktop/Misdemeanor Clients"
+}
+"""
 
 # === Load config ===
 def resource_path(relative_path):
@@ -27,7 +45,7 @@ with open(config_path, "r") as f:
     config = json.load(f)
 
 BAR_NUMBER = config.get("bar_number")
-DESTINATION_FOLDER = config.get("destination_folder")  # e.g. "Doug Misdemeanor Clients"
+DESTINATION_FOLDER = config.get("destination_folder")
 
 # === Utility functions ===
 def hide():
@@ -36,6 +54,10 @@ def hide():
 def ensureFolder(path):
     os.makedirs(path, exist_ok=True)
     print(f"Ensured folder: {path}")
+
+def normalize(s):
+    """Remove whitespace, make uppercase, remove invisible characters."""
+    return ''.join(s.split()).upper()
 
 def parseCase(soup: BeautifulSoup):
     result = {}
@@ -62,25 +84,31 @@ def parseCase(soup: BeautifulSoup):
 
     return result
 
+def count_csv_rows(filepath):
+    with open(filepath, 'r', newline='', encoding='utf-7') as file:
+        reader = csv.reader(file)
+        return sum(1 for _ in reader)
+
 def write_cases_to_csv(bar_number, cases):
     ensureFolder(DESTINATION_FOLDER)
-
     csv_path = os.path.join(DESTINATION_FOLDER, f'{bar_number}_Cases.csv')
-    seen = set()
 
+    seen = set()
+    added = skipped = 0
+    initial_length = 0
     if os.path.isfile(csv_path):
-        print(f'{csv_path} exists')
-        with open(csv_path, 'r', newline='') as f:
+        initial_length = count_csv_rows(csv_path)
+        with open(csv_path, 'r', newline='', encoding='utf-7') as f:
             reader = csv.reader(f)
-            next(reader, None)  # skip header
+            next(reader, None)  # Skip header
             for row in reader:
                 if len(row) >= 2:
-                    seen.add((row[0].strip(), row[1].strip()))
+                    seen.add((normalize(row[0]), normalize(row[1])))
     else:
         print(f"{csv_path} doesn't exist, creating new file")
 
     file_mode = 'a' if os.path.isfile(csv_path) else 'w'
-    with open(csv_path, file_mode, newline='') as csvfile:
+    with open(csv_path, file_mode, newline='', encoding='utf-7') as csvfile:
         writer = csv.writer(csvfile, quoting=csv.QUOTE_MINIMAL)
         if file_mode == 'w':
             writer.writerow(['Client Name', 'Case Number', 'Date', 'Case Count'])
@@ -88,27 +116,37 @@ def write_cases_to_csv(bar_number, cases):
         for case in cases:
             client_name = case.get('Client Name', '').strip()
             case_num = case.get('Case Number', '').strip()
-            key = (client_name, case_num)
+            key = (normalize(client_name), normalize(case_num))
+
             if key not in seen:
                 writer.writerow([client_name, case_num, "", ""])
                 seen.add(key)
-                print(f"Case {key} added to CSV")
+                added += 1
+                print(f"✅ Added: {key}")
             else:
-                print(f"Case {key} already in CSV")
+                skipped += 1
+                print(f"⏩ Skipped duplicate: {key}")
+
+    final_length = count_csv_rows(csv_path)
+    print(f"""
+CSV Write Summary:
+  Initial length:     {initial_length}
+  Final length:       {final_length}
+  Cases added:        {added}
+  Duplicates skipped: {skipped}
+""")
 
 class Scraper:
     def __init__(self):
         self.chrome_binary = resource_path(os.path.join("chrome-win64", "chrome.exe"))
         self.driver_binary = resource_path(os.path.join("chromedriver-win64", "chromedriver.exe"))
         self.driver = None
-
         self.ready_event = threading.Event()
 
     def open_browser_and_wait(self):
         if not os.path.isfile(self.chrome_binary):
             print(f"Chrome binary not found at: {self.chrome_binary}")
             sys.exit(1)
-
         if not os.path.isfile(self.driver_binary):
             print(f"ChromeDriver binary not found at: {self.driver_binary}")
             sys.exit(1)
@@ -124,37 +162,10 @@ class Scraper:
         print('Opening browser to login page...')
         self.driver.set_page_load_timeout(10)
         self.driver.get("https://dw.courts.wa.gov/index.cfm?fa=home.atty&terms=accept&flashform=0")
-                
-        # # Autofill bar number
-        # # This just makes the Captcha so suspicious of me
-        # try:
-        #     bar_input = self.driver.find_element(By.ID, "Bar_Nbr")
-        #     bar_input.clear()
-        #     bar_input.send_keys(BAR_NUMBER)
-        #     print(f"Set Bar Number to {BAR_NUMBER}")
-        # except Exception as e:
-        #     print("⚠️ Failed to autofill bar number:", e)
 
-        # # Select 90 from dropdown menu using JS and interaction
-        # try:
-        #     dropdown_anchor = WebDriverWait(self.driver, 10).until(
-        #         EC.element_to_be_clickable((By.CLASS_NAME, "mdc-select__anchor"))
-        #     )
-        #     dropdown_anchor.click()
+        print("\n*** Please complete the captcha in the browser window. ***")
+        print("*** When done, click 'Continue' in the GUI. ***\n")
 
-        #     option_90 = WebDriverWait(self.driver, 10).until(
-        #         EC.element_to_be_clickable((By.CSS_SELECTOR, 'li.mdc-list-item[data-value="90"]'))
-        #     )
-
-        #     ActionChains(self.driver).move_to_element(option_90).click().perform()
-        #     print("Set number of days to 90")
-        # except Exception as e:
-        #     print("⚠️ Failed to set number of days to 90:", e)
-
-        print("\n*** Please complete the captcha or login in the opened browser window. ***")
-        print("*** When done, click the 'Continue' button in the GUI to proceed. ***\n")
-
-        # Wait until the GUI signals to continue
         self.ready_event.wait()
 
     def scrape_cases(self):
@@ -164,7 +175,6 @@ class Scraper:
 
         html = self.driver.page_source
         soup = BeautifulSoup(html, "lxml")
-
         caseSoups = soup.find_all("div", class_="dw-search-result std-vertical-med-margin dw-cal-search-result")
         print(f'Found {len(caseSoups)} cases (before filtering)')
 
@@ -173,13 +183,12 @@ class Scraper:
             details = parseCase(case_soup)
             if details.get("Court") != "SUNNYSIDE MUNICIPAL":
                 continue
-            print(details)
             caseDetails.append(details)
 
-        # Ensure the root folder is present
+        print(f'Filtered to {len(caseDetails)} Sunnyside cases.')
+
         ensureFolder(DESTINATION_FOLDER)
 
-        # Create case folders inside the root
         for case in caseDetails:
             client = case.get('Client Name', 'Unknown')
             case_num = case.get('Case Number', 'NoCaseNumber')
@@ -187,28 +196,21 @@ class Scraper:
             case_folder_path = os.path.join(DESTINATION_FOLDER, case_folder)
             ensureFolder(case_folder_path)
 
-        # Write to CSV inside the same root
         write_cases_to_csv(BAR_NUMBER, caseDetails)
-
         self.driver.quit()
-        print("Done!")
+        print("✅ Done!")
 
 def run_main(continue_event=None):
     scraper = Scraper()
 
     if continue_event is None:
-        # No event means just run all normally (CLI mode)
         scraper.open_browser_and_wait()
         scraper.scrape_cases()
     else:
-        # GUI mode: open browser, then wait for signal to continue
-        # Start browser in separate thread to avoid blocking GUI
         def open_browser_thread():
             scraper.open_browser_and_wait()
             scraper.scrape_cases()
         threading.Thread(target=open_browser_thread, daemon=True).start()
-
-        # Wait for GUI signal
         continue_event.wait()
         scraper.ready_event.set()
 

@@ -143,6 +143,10 @@ def get_sos_info(driver, ubi):
 
 
 def get_lni_info(driver, ubi):
+    from selenium.common.exceptions import (
+        TimeoutException, StaleElementReferenceException, WebDriverException
+    )
+
     try:
         driver.get("https://secure.lni.wa.gov/verify/")
         print("LNI loaded. Use the search box to look up the contractor. Press ENTER when the result list appears.")
@@ -158,63 +162,61 @@ def get_lni_info(driver, ubi):
         print(f"✅ Saved contractor list HTML to: {list_path}")
 
         list_url = driver.current_url
+        contractors = []
 
         result_divs = driver.find_elements(By.CSS_SELECTOR, "div.resultItem")
         if not result_divs:
             print("ℹ️  No LNI contractor results found.")
             return []
 
-        contractors = []
-
         for idx in range(len(result_divs)):
-            result_divs = driver.find_elements(By.CSS_SELECTOR, "div.resultItem")
-            if idx >= len(result_divs):
-                print(f"⚠️  Skipping contractor #{idx + 1}: DOM changed or index out of bounds.")
-                break
-
-            print(f"\n➡️  Navigating to contractor detail page #{idx + 1}...")
-            driver.execute_script("arguments[0].scrollIntoView(true);", result_divs[idx])
-            result_divs[idx].click()
-
             try:
+                print(f"\n➡️  Navigating to contractor detail page #{idx + 1}...")
+
+                result_divs = driver.find_elements(By.CSS_SELECTOR, "div.resultItem")
+                if idx >= len(result_divs):
+                    print(f"⚠️  Skipping contractor #{idx + 1}: DOM changed or index out of bounds.")
+                    break
+
+                contractor_elem = result_divs[idx]
+                driver.execute_script("arguments[0].scrollIntoView(true);", contractor_elem)
+                contractor_elem.click()
+
+                # Wait for a reliable anchor in the contractor detail page
                 WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, "div.contractorDetailDiv"))
+                    EC.presence_of_element_located((By.XPATH, "//h3[contains(text(), 'Contractor Information')]"))
                 )
+                time.sleep(0.5)  # slight buffer to ensure render
 
-                # Confirm detail panel is not collapsed
-                detail_div = driver.find_element(By.CSS_SELECTOR, "div.contractorDetailDiv")
-                if "display: none" in detail_div.get_attribute("style"):
-                    print(f"⚠️  Contractor detail page #{idx + 1} is collapsed or empty.")
-                    continue
+                html = driver.page_source
+                detail_path = os.path.join(temp_dir, f"lni_detail_{idx + 1}.html")
+                with open(detail_path, "w", encoding="utf-8") as f:
+                    f.write(html)
+                print(f"✅ Saved contractor detail HTML #{idx + 1} to: {detail_path}")
 
-            except Exception as e:
-                print(f"⚠️  Contractor detail page #{idx + 1} failed to load expected content: {e}")
-                continue
-
-            detail_path = os.path.join(temp_dir, f"lni_detail_{idx + 1}.html")
-            with open(detail_path, "w", encoding="utf-8") as f:
-                f.write(driver.page_source)
-            print(f"✅ Saved contractor detail HTML #{idx + 1} to: {detail_path}")
-
-            with open(detail_path, "r", encoding="utf-8") as f:
-                html = f.read()
                 parsed = get_lni_info_from_html("<stub_list>", [html])
                 if parsed and isinstance(parsed, list) and parsed[0]:
                     contractors.append(parsed[0])
 
-            driver.get(list_url)
-            try:
-                WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, "div.resultItem"))
-                )
-            except:
-                print("⚠️  Could not return to result list from detail page.")
-                break
+            except TimeoutException:
+                print(f"⚠️  Contractor detail page #{idx + 1} failed to load expected content.")
+            except (StaleElementReferenceException, WebDriverException) as e:
+                print(f"⚠️  Contractor #{idx + 1} navigation error: {e}")
+            finally:
+                # Return to results list page
+                driver.get(list_url)
+                try:
+                    WebDriverWait(driver, 10).until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, "div.resultItem"))
+                    )
+                except TimeoutException:
+                    print("⚠️  Could not return to result list from detail page.")
+                    break
 
         return contractors
 
     except Exception as e:
-        print(f"LNI error: {e}")
+        print(f"🚨 LNI navigation error: {e}")
         return {"status": "error"}
 
 

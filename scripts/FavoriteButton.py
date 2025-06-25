@@ -183,9 +183,14 @@ def get_lni_info_from_html(list_html: str, detail_htmls: list[str]) -> list[dict
 
     for idx, detail_html in enumerate(detail_htmls):
         print(f"\n📄 Contractor #{idx + 1} Detail Page:")
-
         soup = BeautifulSoup(detail_html, "html.parser")
         info = {}
+
+        # Expand contract section if collapsed
+        hidden = soup.select_one("div.contractorDetailDiv[style*='display: none']")
+        if hidden:
+            print("⚠️  Detail appears collapsed in HTML — please ensure 'Expand Detail' was clicked before saving.")
+            continue
 
         # Registration Number
         reg_label = soup.find("label", string=lambda s: s and "Registration #" in s)
@@ -227,7 +232,7 @@ def get_lni_info_from_html(list_html: str, detail_htmls: list[str]) -> list[dict
             status_val = status_label.find_next("span").get_text(strip=True)
             info["License Suspended"] = status_val
 
-        # Lawsuits / Bond Claims (if available)
+        # Lawsuits / Bond Claims
         lawsuit_section = soup.find("h4", string=lambda s: s and "Lawsuits" in s)
         if lawsuit_section:
             lawsuit_table = lawsuit_section.find_next("table")
@@ -244,11 +249,12 @@ def get_lni_info_from_html(list_html: str, detail_htmls: list[str]) -> list[dict
                         })
                 info["Lawsuits"] = lawsuits
 
-        # Print summary
-        for key, val in info.items():
-            print(f"  {key}: {val if not isinstance(val, list) else f'{len(val)} item(s)'}")
-
-        contractors.append(info)
+        if info:
+            contractors.append(info)
+            for key, val in info.items():
+                print(f"  {key}: {val if not isinstance(val, list) else f'{len(val)} item(s)'}")
+        else:
+            print("⚠️  No contractor data extracted from this page.")
 
     return contractors
 
@@ -286,8 +292,16 @@ def fill_pdf(sos, lni, dor, output_path):
     can.drawString(100, 600, f"Agent Mailing: {sos.get('agent_mailing', '')}")
     can.drawString(100, 580, f"Governors: {', '.join(sos.get('governors', []))}")
 
-    # --- LNI and DOR placeholders ---
-    can.drawString(100, 560, f"LNI status: {lni.get('status', 'Not implemented')}")
+    # --- LNI section ---
+    y = 560
+    can.drawString(100, y, f"LNI: {len(lni)} contractor(s) found")
+    y -= 20
+    for i, contractor in enumerate(lni[:2], 1):  # Show first 2 contractors on page
+        can.drawString(100, y, f"  {i}. Reg#: {contractor.get('Registration Number', '')}")
+        y -= 20
+
+
+    # --- DOR placeholders ---
     can.drawString(100, 540, f"DOR status: {dor.get('status', 'Not implemented')}")
     can.save()
 

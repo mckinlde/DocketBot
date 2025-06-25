@@ -52,180 +52,125 @@
 import os
 import sys
 import time
-import copy
-from io import BytesIO
 from datetime import datetime
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from pypdf import PdfReader, PdfWriter
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
-from pypdf import PdfReader, PdfWriter
+from io import BytesIO
 
-PARTIES_PER_PAGE = 9
+# --- CONFIG ---
+SCRIPT_PATH = os.path.abspath(__file__)
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(SCRIPT_PATH), ".."))
+CHROME_BINARY = os.path.join(BASE_DIR, "chrome-win64", "chrome.exe")
+CHROMEDRIVER_BINARY = os.path.join(BASE_DIR, "chromedriver-win64", "chromedriver.exe")
+PDF_TEMPLATE = os.path.join(BASE_DIR, "assets", "000 New Matter Form.pdf")
+OUTPUT_DIR = os.path.join(BASE_DIR, "output")
 
-# -- Configurable Chrome paths
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-def resource_path(rel): return os.path.join(BASE_DIR, rel)
-CHROME_BINARY = resource_path("chrome-win64/chrome.exe")
-CHROMEDRIVER_BINARY = resource_path("chromedriver-win64/chromedriver.exe")
+if not os.path.exists(OUTPUT_DIR):
+    os.makedirs(OUTPUT_DIR)
 
-# -- Setup Selenium
-
-def setup_driver():
+# --- HELPERS ---
+def init_driver():
     options = Options()
     options.binary_location = CHROME_BINARY
     options.add_argument("--no-sandbox")
-    options.add_argument("--disable-gpu")
+    options.add_argument("--disable-dev-shm-usage")
     return webdriver.Chrome(service=Service(CHROMEDRIVER_BINARY), options=options)
 
-# -- Overlay PDF Drawing
+def wait_for_continue(prompt="Press ENTER to continue, or ';' to skip."):
+    resp = input(prompt)
+    if resp.strip() == ";":
+        return False
+    return True
 
-def overlay_text(fields, page_index=0):
+# --- SCRAPERS ---
+def get_sos_info(driver, ubi):
+    try:
+        driver.get(f"https://ccfs.sos.wa.gov/#/BusinessSearch/UBI/{ubi}")
+        print("SOS loaded. Press ENTER after navigating to the detail view.", end="")
+        if not wait_for_continue():
+            return {"status": "Not found"}
+
+        # Add actual scraping logic here if needed
+        return {"status": "Not implemented"}
+    except Exception as e:
+        print(f"SOS error: {e}")
+        return {"status": "error"}
+
+def get_lni_info(driver):
+    try:
+        driver.get("https://secure.lni.wa.gov/verify/")
+        print("LNI loaded. Press ENTER after page settles.", end="")
+        if not wait_for_continue():
+            return {"status": "Not found"}
+
+        return {"status": "Not implemented"}
+    except Exception as e:
+        print(f"LNI error: {e}")
+        return {"status": "error"}
+
+def get_dor_info(driver):
+    try:
+        driver.get("https://secure.dor.wa.gov/gteunauth/_/#1")
+        print("DOR loaded. Complete CAPTCHA and select business, then ENTER.", end="")
+        if not wait_for_continue():
+            return {"status": "Not found"}
+
+        return {"status": "Not implemented"}
+    except Exception as e:
+        print(f"DOR error: {e}")
+        return {"status": "error"}
+
+# --- PDF ---
+def fill_pdf(sos, lni, dor, output_path):
+    print(f"Generating filled PDF at:\n{output_path}")
+    reader = PdfReader(PDF_TEMPLATE)
+    writer = PdfWriter()
+
     packet = BytesIO()
     can = canvas.Canvas(packet, pagesize=letter)
-    if page_index == 0:
-        can.drawString(95, 668, fields.get("company_name", ""))
-        can.drawString(95, 653, fields.get("care_of", ""))
-        can.drawString(95, 638, fields.get("street_address", ""))
-        can.drawString(95, 623, fields.get("city_state_zip", ""))
-        can.drawString(95, 608, fields.get("email", ""))
-        can.drawString(340, 608, fields.get("phone", ""))
-        y = 593
-        for line in fields.get("notes", []):
-            can.drawString(95, y, line)
-            y -= 12
-    # Parties
-    offset = page_index * PARTIES_PER_PAGE
-    for i, p in enumerate(fields.get("parties", [])[offset:offset+PARTIES_PER_PAGE]):
-        base_y = 480 - (i * 58)
-        can.drawString(95, base_y, p["name"])
-        can.drawString(95, base_y - 12, p["desc"])
-        can.drawString(95, base_y - 24, p["assoc"])
+    can.drawString(100, 700, f"SOS status: {sos.get('status', 'OK')}")
+    can.drawString(100, 680, f"LNI status: {lni.get('status', 'OK')}")
+    can.drawString(100, 660, f"DOR status: {dor.get('status', 'OK')}")
     can.save()
+
     packet.seek(0)
-    return packet
+    overlay_pdf = PdfReader(packet)
+    first_page = reader.pages[0]
+    first_page.merge_page(overlay_pdf.pages[0])
+    writer.add_page(first_page)
 
-# -- PDF Fill Logic
-
-def fill_pdf(sos, lni, dor, output_path):
-    fields = {
-        "company_name": sos.get("company_name") or dor.get("business_name", ""),
-        "street_address": sos.get("street_address", ""),
-        "city_state_zip": "",
-        "care_of": sos.get("registered_agent", ""),
-        "email": "", "phone": "",
-        "notes": [],
-        "parties": []
-    }
-    if sos.get("status"): fields["notes"].append(f"Status: {sos['status']}")
-    if sos.get("inactive_date"): fields["notes"].append(f"Inactive since: {sos['inactive_date']}")
-    if lni.get("license_status"): fields["notes"].append(f"LNI Status: {lni['license_status']}")
-
-    fields["parties"].extend({"name": g, "desc": "Governor", "assoc": ""} for g in sos.get("governors", []) + dor.get("governors", []))
-    for bond in lni.get("bonds", []):
-        fields["parties"].append({"name": bond["bond_company"], "desc": f"${bond['bond_amount']} - Bond", "assoc": f"#{bond['bond_number']}"})
-    for suit in lni.get("lawsuits", []):
-        fields["parties"].append({"name": suit["parties"], "desc": f"Lawsuit in {suit['county']}", "assoc": f"{suit['case_number']} - {suit['status']}"})
-
-    reader = PdfReader(os.path.join(BASE_DIR, "assets", "000 New Matter Form.pdf"))
-    writer = PdfWriter()
-    total_pages = (len(fields["parties"]) + PARTIES_PER_PAGE - 1) // PARTIES_PER_PAGE or 1
-    for i in range(total_pages):
-        overlay = PdfReader(overlay_text(fields, i))
-        page = copy.copy(reader.pages[0])
-        page.merge_page(overlay.pages[0])
-        writer.add_page(page)
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with open(output_path, "wb") as f:
         writer.write(f)
-    print(f"✅ PDF saved: {output_path}")
 
-# -- Scraping Logic --
+# --- MAIN ---
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: FavoriteButton.py <UBI>")
+        sys.exit(1)
 
-def get_sos_info(driver, ubi):
-    url = f"https://ccfs.sos.wa.gov/#/BusinessSearch/UBI/{ubi}"
-    driver.get(url)
-    input("SOS loaded. Press ENTER after navigating to the detail view.")
-    def get(label):
-        try: return driver.find_element(By.XPATH, f"//h3[contains(text(), '{label}')]/following-sibling::p").text.strip()
-        except: return None
-    info = {
-        "company_name": get("Business Name"),
-        "status": get("Status"),
-        "inactive_date": get("Inactive Date"),
-        "street_address": get("Street Address"),
-        "mailing_address": get("Mailing Address"),
-        "registered_agent": get("Registered Agent"),
-        "registered_agent_address": get("RA Address")
-    }
-    try:
-        govs = driver.find_elements(By.XPATH, "//h3[contains(text(),'Governing Persons')]/following-sibling::ul/li")
-        info["governors"] = [g.text.strip() for g in govs]
-    except: info["governors"] = []
-    return info
+    ubi = sys.argv[1]
+    print(f"\n🔍 Looking up UBI: {ubi}\n")
 
-def get_lni_info(driver, ubi):
-    url = f"https://secure.lni.wa.gov/verify/Detail.aspx?UBI={ubi}"
-    driver.get(url)
-    input("LNI loaded. Press ENTER after page settles.")
-    def safe(id):
-        try: return driver.find_element(By.ID, id).text.strip()
-        except: return None
-    info = {
-        "contractor_registration_number": safe("MainContent_lblContrRegNum"),
-        "license_status": safe("MainContent_lblContrStatus"),
-        "insurance_company": safe("MainContent_lblInsCarrier"),
-        "insurance_amount": safe("MainContent_lblInsAmount")
-    }
-    info["bonds"] = []
-    info["lawsuits"] = []
-    try:
-        for row in driver.find_elements(By.XPATH, "//table[@id='MainContent_gvBond']/tbody/tr")[1:]:
-            tds = row.find_elements(By.TAG_NAME, "td")
-            info["bonds"].append({"bond_company": tds[0].text, "bond_amount": tds[1].text, "bond_number": tds[2].text})
-    except: pass
-    try:
-        for row in driver.find_elements(By.XPATH, "//table[@id='MainContent_gvLawsuit']/tbody/tr")[1:]:
-            tds = row.find_elements(By.TAG_NAME, "td")
-            info["lawsuits"].append({"case_number": tds[0].text, "county": tds[1].text, "parties": tds[2].text, "status": tds[3].text})
-    except: pass
-    return info
+    driver = init_driver()
 
-def get_dor_info(driver, ubi):
-    driver.get("https://secure.dor.wa.gov/gteunauth/_/#1")
-    input("DOR loaded. Complete CAPTCHA and select business, then ENTER.")
-    def safe(id):
-        try: return driver.find_element(By.ID, id).text.strip()
-        except: return None
-    info = {
-        "entity_name": safe("ctl00_ContentPlaceHolder1_lblEntityName"),
-        "business_name": safe("ctl00_ContentPlaceHolder1_lblBusinessName")
-    }
     try:
-        info["trade_names"] = driver.find_element(By.ID, "ctl00_ContentPlaceHolder1_lblTradeNames").text.split("\n")
-    except: info["trade_names"] = []
-    try:
-        rows = driver.find_elements(By.XPATH, "//table[@id='ctl00_ContentPlaceHolder1_gvPrincipals']/tbody/tr")[1:]
-        info["governors"] = [row.text.strip() for row in rows if row.text.strip()]
-    except: info["governors"] = []
-    return info
+        sos = get_sos_info(driver, ubi)
+        lni = get_lni_info(driver)
+        dor = get_dor_info(driver)
+    finally:
+        driver.quit()
 
-# -- Main Entry Point --
+    output_filename = datetime.now().strftime("%Y-%m-%d Intake Form.pdf")
+    output_path = os.path.join(OUTPUT_DIR, output_filename)
+
+    fill_pdf(sos, lni, dor, output_path)
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Usage: python FavoriteButton.py <UBI_NUMBER>")
-        sys.exit(1)
-    ubi = sys.argv[1].strip()
-    driver = setup_driver()
-    sos = get_sos_info(driver, ubi)
-    lni = get_lni_info(driver, ubi)
-    dor = get_dor_info(driver, ubi)
-    driver.quit()
-    today = datetime.today().strftime("%Y-%m-%d")
-    output_file = resource_path(f"output/{today}_{ubi}_filled.pdf")
-    fill_pdf(sos, lni, dor, output_file)
+    main()

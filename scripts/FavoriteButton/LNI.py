@@ -41,7 +41,6 @@ def navigate_lni(driver, ubi):
         WebDriverWait(driver, 10).until(EC.visibility_of_element_located((By.ID, "txtSearchBy")))
         time.sleep(1)
 
-        # Use JavaScript to safely enter UBI and trigger validation
         print(f"⌨️ Entering UBI: {ubi}")
         driver.execute_script(f"document.getElementById('txtSearchBy').value = '{ubi}';")
         driver.execute_script("document.getElementById('txtSearchBy').dispatchEvent(new Event('blur'));")
@@ -49,12 +48,10 @@ def navigate_lni(driver, ubi):
 
         print("🖱️ Clicking Search button...")
         driver.execute_script("arguments[0].click();", driver.find_element(By.ID, "searchButton"))
-
         print("⏳ Waiting for search results body...")
         WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "body")))
         time.sleep(1)
 
-        # Check for validation error
         error_div = driver.find_element(By.ID, "valMsg")
         if error_div.is_displayed() and error_div.text.strip():
             msg = error_div.text.strip()
@@ -76,23 +73,24 @@ def parse_contractor_html(html):
     soup = BeautifulSoup(html, "html.parser")
     data = {}
 
-    def get_text(label):
-        tag = soup.find("td", string=lambda s: s and label.lower() in s.lower())
-        if tag and tag.find_next_sibling("td"):
-            return tag.find_next_sibling("td").get_text(strip=True)
+    def get_field(label):
+        cell = soup.find("td", string=lambda s: s and label.lower() in s.lower())
+        if cell and cell.find_next_sibling("td"):
+            return cell.find_next_sibling("td").get_text(strip=True)
         return None
 
-    data["Contractor Name"] = soup.find("span", id="lblBusinessName")
-    if data["Contractor Name"]:
-        data["Contractor Name"] = data["Contractor Name"].get_text(strip=True)
+    def get_by_id(element_id):
+        el = soup.find(id=element_id)
+        return el.get_text(strip=True) if el else None
 
-    data["Registration Number"] = get_text("Registration Number")
-    data["Bonding Company"] = get_text("Bonding Company")
-    data["Bond Amount"] = get_text("Bond Amount")
-    data["Insurance Company"] = get_text("Insurance Company")
-    data["Insurance Amount"] = get_text("Insurance Amount")
-    data["Suspended"] = get_text("Suspended")
-    data["Lawsuits"] = get_text("Lawsuits Against This Bond")
+    data["Contractor Name"] = get_by_id("lblBusinessName")
+    data["Registration Number"] = get_field("Registration Number")
+    data["Bonding Company"] = get_field("Bonding Company")
+    data["Bond Amount"] = get_field("Bond Amount")
+    data["Insurance Company"] = get_field("Insurance Company")
+    data["Insurance Amount"] = get_field("Insurance Amount")
+    data["Suspended"] = get_field("Suspended")
+    data["Lawsuits"] = get_field("Lawsuits Against This Bond")
 
     return data
 
@@ -106,21 +104,17 @@ def get_lni_contractors(driver):
     save_html(driver.page_source, "lni_list.html")
     save_screenshot(driver, "lni_list.png")
 
-    if not result_items:
-        print("⚠️ No contractor items found; retrying after wait...")
-        time.sleep(2)
-        soup = BeautifulSoup(driver.page_source, "html.parser")
-        result_items = soup.select("div.resultItem")
-        print(f"📦 Contractor count after retry: {len(result_items)}")
-
-    for i, _ in enumerate(result_items):
+    for i in range(len(result_items)):
         try:
             print(f"\n➡️ Clicking contractor result #{i+1}...")
-            result_div = driver.find_elements(By.CSS_SELECTOR, "div.resultItem")[i]
-            driver.execute_script("arguments[0].click();", result_div)
 
-            print("⏳ Waiting for detail page load...")
-            WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "body")))
+            result_items = driver.find_elements(By.CSS_SELECTOR, "div.resultItem")
+            driver.execute_script("arguments[0].click();", result_items[i])
+
+            print("⏳ Waiting for detail page to load...")
+            WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.CLASS_NAME, "contractorHeader"))
+            )
             time.sleep(1)
 
             html = driver.page_source
@@ -129,7 +123,6 @@ def get_lni_contractors(driver):
 
             parsed = parse_contractor_html(html)
             contractors.append(parsed)
-
             print(f"✅ Parsed contractor #{i+1}: {parsed.get('Contractor Name', 'Unnamed')}")
 
             print("🔙 Returning to results list...")

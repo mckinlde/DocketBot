@@ -28,11 +28,6 @@
 #     - if contractors license is suspended
 #     - any active lawsuits against the bond, case number, county, parites, status 
 
-#     Department of Revenue
-#     - Entity name
-#     - Business name
-#     - Trade names, if any
-#     - Governors
 import os
 import re
 import time

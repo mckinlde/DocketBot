@@ -12,6 +12,18 @@
 # LNI Verify a Contractor: https://secure.lni.wa.gov/verify/Detail.aspx?UBI={UBI}
 # Department of Revenue: https://secure.dor.wa.gov/gteunauth/_/#1 (requires form submission, see DOR_form)
 
+# # LNI contractor detail pages now load and extract structured data automatically. The script:
+#     Clicks each contractor result element directly.
+#     Waits for expected detail content.
+#     Saves each page's HTML for debug.
+#     Returns to the saved result list URL (instead of using a brittle back button).
+# Extracts:
+#     Registration number
+#     Bond(s) (company, number, amount)
+#     Insurance (company, amount)
+#     License suspension status
+#     Lawsuits (case number, county, parties, status)
+
 # # DOR_Form:
 # 1) Click the "business lookup button": (<span id="Dg-1-1_c" class="ColIconText">Business Lookup</span>)
 # 2) Fill the UBI/Accound ID# field: (<div id="fc_Dc-s" data-name="Dc-s" class="FGFC FGCPTop FGCPTopVisible CTEC FGTBC FGControlText FieldEnabled Field FGFill"><span class="FGDW FGDWStandard"><label id="lb_Dc-s" class="FGD2 CTEW FGD2Standard" for="Dc-s"><a id="cl_Dc-s" href="#RLZy8PtWWnMkBnfP_Dc-s" class="CaptionLink DFL FastEvt" data-event="ShowTip" data-showtip="{&quot;lng&quot;:&quot;ENG&quot;,&quot;typ&quot;:&quot;WA.XDBLS&quot;,&quot;hsh&quot;:&quot;&quot;,&quot;idx&quot;:&quot;1&quot;,&quot;fmt&quot;:&quot;TEXT&quot;,&quot;key&quot;:&quot;HelpUBI&quot;}" tabindex="0"><span id="caption2_Dc-s" class="CTE CaptionLinkText  IconCaption ICPLeft IconCaptionSmall" style=""><span class="FICW FICWSmall CaptionIconWrapper"><span role="presentation" aria-hidden="true" class="FIC FICSmall CaptionIcon FICF FICF_Material FICFTAuto" data-iconfont="Material" data-icon="" data-iconstatus="Auto"><img class="FICImg FICImgSmall CaptionIcon" src="../Resource/Images/blank.gif" alt=""></span></span><span class="IconCaptionText">UBI/Account ID #</span></span></a><span id="indicator_Dc-s" class="FI FI"></span></label></span><div class="FGIW FGIWText FGIWFill"><div id="ic_Dc-s" class="FGIC" style=""><input type="text" autocomplete="off" name="Dc-s" id="Dc-s" class="DFI FieldEnabled Field CTEF DocControlText FastEvtFieldKeyDown FastFieldEnterEvent TAAuto TAAutoLeft FastEvtFieldFocus" value="" spellcheck="true" data-fast-enter-event="Dc-s" maxlength="250" tabindex="0" style=""></div></div></div>)
@@ -128,6 +140,7 @@ def get_sos_info(driver, ubi):
         print(f"SOS error: {e}")
         return {"status": "error"}
 
+
 def get_lni_info(driver, ubi):
     try:
         driver.get("https://secure.lni.wa.gov/verify/")
@@ -135,7 +148,6 @@ def get_lni_info(driver, ubi):
         if not wait_for_continue():
             return {"status": "Not found"}
 
-        # Save the list HTML
         temp_dir = os.path.join(BASE_DIR, "temp_html_files")
         os.makedirs(temp_dir, exist_ok=True)
 
@@ -143,6 +155,9 @@ def get_lni_info(driver, ubi):
         with open(list_path, "w", encoding="utf-8") as f:
             f.write(driver.page_source)
         print(f"✅ Saved contractor list HTML to: {list_path}")
+
+        # Save current list page URL
+        list_url = driver.current_url
 
         result_divs = driver.find_elements(By.CSS_SELECTOR, "div.resultItem")
         if not result_divs:
@@ -152,7 +167,6 @@ def get_lni_info(driver, ubi):
         contractors = []
 
         for idx in range(len(result_divs)):
-            # Re-locate each time after navigation
             result_divs = driver.find_elements(By.CSS_SELECTOR, "div.resultItem")
 
             if idx >= len(result_divs):
@@ -163,7 +177,6 @@ def get_lni_info(driver, ubi):
             driver.execute_script("arguments[0].scrollIntoView(true);", result_divs[idx])
             result_divs[idx].click()
 
-            # Wait for the detail page to load by looking for Registration #
             try:
                 WebDriverWait(driver, 10).until(
                     EC.presence_of_element_located((By.XPATH, "//label[contains(text(),'Registration #')]"))
@@ -172,25 +185,20 @@ def get_lni_info(driver, ubi):
                 print(f"⚠️  Contractor detail page #{idx + 1} failed to load expected content.")
                 continue
 
-            # Save the detail page
             detail_path = os.path.join(temp_dir, f"lni_detail_{idx + 1}.html")
             with open(detail_path, "w", encoding="utf-8") as f:
                 f.write(driver.page_source)
             print(f"✅ Saved contractor detail HTML #{idx + 1} to: {detail_path}")
 
-            # Parse and collect data
             with open(detail_path, "r", encoding="utf-8") as f:
                 html = f.read()
                 parsed = get_lni_info_from_html("<stub_list>", [html])
                 if parsed and isinstance(parsed, list) and parsed[0]:
                     contractors.append(parsed[0])
 
-            # Click "Back" to return to result list
+            # Instead of back button, return to list URL and wait for results
+            driver.get(list_url)
             try:
-                back_button = WebDriverWait(driver, 5).until(
-                    EC.element_to_be_clickable((By.ID, "backBtn"))
-                )
-                back_button.click()
                 WebDriverWait(driver, 10).until(
                     EC.presence_of_element_located((By.CSS_SELECTOR, "div.resultItem"))
                 )

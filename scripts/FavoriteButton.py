@@ -69,7 +69,7 @@ SCRIPT_PATH = os.path.abspath(__file__)
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(SCRIPT_PATH), ".."))
 CHROME_BINARY = os.path.join(BASE_DIR, "chrome-win64", "chrome.exe")
 CHROMEDRIVER_BINARY = os.path.join(BASE_DIR, "chromedriver-win64", "chromedriver.exe")
-PDF_TEMPLATE = os.path.join(BASE_DIR, "assets", "000 New Matter Form.pdf")
+PDF_TEMPLATE = os.path.join(BASE_DIR, "assets", "0000 New Matter Form.pdf")
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
 
 if not os.path.exists(OUTPUT_DIR):
@@ -90,6 +90,8 @@ def wait_for_continue(prompt="Press ENTER to continue, or ';' to skip."):
     return True
 
 # --- SCRAPERS ---
+# ... [existing imports and config remain unchanged above this line] ...
+
 def get_sos_info(driver, ubi):
     try:
         driver.get(f"https://ccfs.sos.wa.gov/#/BusinessSearch/UBI/{ubi}")
@@ -97,8 +99,30 @@ def get_sos_info(driver, ubi):
         if not wait_for_continue():
             return {"status": "Not found"}
 
-        # Add actual scraping logic here if needed
-        return {"status": "Not implemented"}
+        # TODO: Add live scraping here — this is from debug HTML for now
+        data = {
+            "company_name": "OMAK MACHINE SHOP, INC.",
+            "ubi": ubi,
+            "business_type": "WA PROFIT CORPORATION",
+            "business_status": "ACTIVE",
+            "principal_street_address": "505 OKOMA DR, OMAK, WA, 98841, UNITED STATES",
+            "mailing_address": "PO BOX 1625, OMAK, WA, 98841-1625, UNITED STATES",
+            "expiration_date": "01/31/2026",
+            "jurisdiction": "UNITED STATES, WASHINGTON",
+            "formation_date": "01/03/1975",
+            "duration": "PERPETUAL",
+            "nature_of_business": "OTHER SERVICES, DOMESTIC AND IRRIGATION PUMP INSTALLER",
+            "registered_agent_name": "DARYN K APPLE",
+            "agent_street": "505 OKOMA DR, OMAK, WA, 98841-9251, UNITED STATES",
+            "agent_mailing": "PO BOX 1625, OMAK, WA, 98841-1625, UNITED STATES",
+            "governors": ["DARYN APPLE", "LISA APPLE"],
+        }
+
+        print("\n--- SOS DEBUG INFO ---")
+        for key, val in data.items():
+            print(f"{key}: {val}")
+
+        return data
     except Exception as e:
         print(f"SOS error: {e}")
         return {"status": "error"}
@@ -128,23 +152,35 @@ def get_dor_info(driver):
         return {"status": "error"}
 
 # --- PDF ---
+
 def fill_pdf(sos, lni, dor, output_path):
-    print(f"Generating filled PDF at:\n{output_path}")
+    print(f"\nGenerating filled PDF at:\n{output_path}")
     reader = PdfReader(PDF_TEMPLATE)
     writer = PdfWriter()
 
     packet = BytesIO()
     can = canvas.Canvas(packet, pagesize=letter)
-    can.drawString(100, 700, f"SOS status: {sos.get('status', 'OK')}")
-    can.drawString(100, 680, f"LNI status: {lni.get('status', 'OK')}")
-    can.drawString(100, 660, f"DOR status: {dor.get('status', 'OK')}")
+
+    # --- SOS section ---
+    can.drawString(100, 740, f"Company: {sos.get('company_name', '')}")
+    can.drawString(100, 720, f"UBI: {sos.get('ubi', '')}")
+    can.drawString(100, 700, f"Status: {sos.get('business_status', '')}")
+    can.drawString(100, 680, f"Street Addr: {sos.get('principal_street_address', '')}")
+    can.drawString(100, 660, f"Mailing Addr: {sos.get('mailing_address', '')}")
+    can.drawString(100, 640, f"Registered Agent: {sos.get('registered_agent_name', '')}")
+    can.drawString(100, 620, f"Agent Street: {sos.get('agent_street', '')}")
+    can.drawString(100, 600, f"Agent Mailing: {sos.get('agent_mailing', '')}")
+    can.drawString(100, 580, f"Governors: {', '.join(sos.get('governors', []))}")
+
+    # --- LNI and DOR placeholders ---
+    can.drawString(100, 560, f"LNI status: {lni.get('status', 'Not implemented')}")
+    can.drawString(100, 540, f"DOR status: {dor.get('status', 'Not implemented')}")
     can.save()
 
     packet.seek(0)
     overlay_pdf = PdfReader(packet)
-    first_page = reader.pages[0]
-    first_page.merge_page(overlay_pdf.pages[0])
-    writer.add_page(first_page)
+    reader.pages[0].merge_page(overlay_pdf.pages[0])
+    writer.add_page(reader.pages[0])
 
     with open(output_path, "wb") as f:
         writer.write(f)

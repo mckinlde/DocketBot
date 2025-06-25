@@ -12,6 +12,10 @@ if (-not $env:VIRTUAL_ENV) {
     Write-Host "Virtual environment already activated."
 }
 
+# """ === To activate .venv manually:
+# .\.venv\Scripts\activate
+# """
+
 Write-Host "Installing dependencies from requirements.txt..."
 pip install -r requirements.txt
 

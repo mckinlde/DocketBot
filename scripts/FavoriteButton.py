@@ -305,42 +305,83 @@ def get_dor_info(driver):
 
 # --- PDF ---
 
-def fill_pdf(sos, lni, dor, output_path):
-    print(f"\nGenerating filled PDF at:\n{output_path}")
+def fill_pdf(sos, lni_contractors, dor, output_path):
+    print(f"\n📝 Generating filled PDF at:\n{output_path}")
     reader = PdfReader(PDF_TEMPLATE)
     writer = PdfWriter()
 
+    def draw_sos(can):
+        can.drawString(100, 740, f"Company: {sos.get('company_name', '')}")
+        can.drawString(100, 720, f"UBI: {sos.get('ubi', '')}")
+        can.drawString(100, 700, f"Status: {sos.get('business_status', '')}")
+        can.drawString(100, 680, f"Street Addr: {sos.get('principal_street_address', '')}")
+        can.drawString(100, 660, f"Mailing Addr: {sos.get('mailing_address', '')}")
+        can.drawString(100, 640, f"Registered Agent: {sos.get('registered_agent_name', '')}")
+        can.drawString(100, 620, f"Agent Street: {sos.get('agent_street', '')}")
+        can.drawString(100, 600, f"Agent Mailing: {sos.get('agent_mailing', '')}")
+        can.drawString(100, 580, f"Governors: {', '.join(sos.get('governors', []))}")
+
+    def draw_dor(can):
+        can.drawString(100, 160, f"DOR status: {dor.get('status', 'Not implemented')}")
+
+    # Create LNI pages with multiple contractors
+    def create_lni_pages():
+        pages = []
+        max_lines_per_page = 30
+        lines = []
+
+        for idx, contractor in enumerate(lni_contractors):
+            lines.append(f"Contractor #{idx + 1}")
+            lines.append(f"Registration #: {contractor.get('Registration Number', 'N/A')}")
+
+            for bond in contractor.get("Bonds", []):
+                lines.append(f"  Bond - Company: {bond['Bonding Company']}, Number: {bond['Bond Number']}, Amount: {bond['Amount']}")
+
+            lines.append(f"Insurance: {contractor.get('Insurance Company', 'N/A')} - {contractor.get('Insurance Amount', '')}")
+            lines.append(f"License Suspended: {contractor.get('License Suspended', 'N/A')}")
+
+            for lawsuit in contractor.get("Lawsuits", []):
+                lines.append(f"  Lawsuit - Case: {lawsuit['Case Number']}, County: {lawsuit['County']}")
+                lines.append(f"           Parties: {lawsuit['Parties']}, Status: {lawsuit['Status']}")
+
+            lines.append("")  # spacer
+
+        # Break into pages
+        for i in range(0, len(lines), max_lines_per_page):
+            page_lines = lines[i:i + max_lines_per_page]
+            pages.append(page_lines)
+
+        return pages
+
+    # Render first page
     packet = BytesIO()
     can = canvas.Canvas(packet, pagesize=letter)
-
-    # --- SOS section ---
-    can.drawString(100, 740, f"Company: {sos.get('company_name', '')}")
-    can.drawString(100, 720, f"UBI: {sos.get('ubi', '')}")
-    can.drawString(100, 700, f"Status: {sos.get('business_status', '')}")
-    can.drawString(100, 680, f"Street Addr: {sos.get('principal_street_address', '')}")
-    can.drawString(100, 660, f"Mailing Addr: {sos.get('mailing_address', '')}")
-    can.drawString(100, 640, f"Registered Agent: {sos.get('registered_agent_name', '')}")
-    can.drawString(100, 620, f"Agent Street: {sos.get('agent_street', '')}")
-    can.drawString(100, 600, f"Agent Mailing: {sos.get('agent_mailing', '')}")
-    can.drawString(100, 580, f"Governors: {', '.join(sos.get('governors', []))}")
-
-    # --- LNI section ---
-    y = 560
-    can.drawString(100, y, f"LNI: {len(lni)} contractor(s) found")
-    y -= 20
-    for i, contractor in enumerate(lni[:2], 1):  # Show first 2 contractors on page
-        can.drawString(100, y, f"  {i}. Reg#: {contractor.get('Registration Number', '')}")
-        y -= 20
-
-
-    # --- DOR placeholders ---
-    can.drawString(100, 540, f"DOR status: {dor.get('status', 'Not implemented')}")
+    draw_sos(can)
+    draw_dor(can)
+    can.drawString(100, 540, "LNI contractors (see next pages if more):")
     can.save()
 
     packet.seek(0)
     overlay_pdf = PdfReader(packet)
-    reader.pages[0].merge_page(overlay_pdf.pages[0])
-    writer.add_page(reader.pages[0])
+    first_page = reader.pages[0]
+    first_page.merge_page(overlay_pdf.pages[0])
+    writer.add_page(first_page)
+
+    # Render LNI detail pages
+    lni_pages = create_lni_pages()
+    for page_lines in lni_pages:
+        packet = BytesIO()
+        can = canvas.Canvas(packet, pagesize=letter)
+        y = 720
+        for line in page_lines:
+            can.drawString(80, y, line)
+            y -= 20
+        can.save()
+        packet.seek(0)
+        overlay_pdf = PdfReader(packet)
+        new_page = reader.pages[0]
+        new_page.merge_page(overlay_pdf.pages[0])
+        writer.add_page(new_page)
 
     with open(output_path, "wb") as f:
         writer.write(f)

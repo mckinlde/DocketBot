@@ -27,162 +27,133 @@
 #     - Insurance company and amount
 #     - if contractors license is suspended
 #     - any active lawsuits against the bond, case number, county, parites, status 
+# lni.py
 
 import os
-import re
 import time
 from bs4 import BeautifulSoup
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, StaleElementReferenceException, WebDriverException
-from scripts.config import TEMP_HTML_DIR
-from scripts.common import wait_for_continue
+from selenium.common.exceptions import TimeoutException, StaleElementReferenceException
+import re
+
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+TEMP_HTML_DIR = os.path.join(BASE_DIR, "temp_html_files")
+os.makedirs(TEMP_HTML_DIR, exist_ok=True)
+
+def wait_for_user(prompt="Press ENTER to continue after results load (or ';' to skip): "):
+    return input(prompt).strip() != ";"
 
 
 def get_lni_info(driver, ubi):
     try:
         driver.get("https://secure.lni.wa.gov/verify/")
-        print("LNI loaded. Use the search box to look up the contractor. Press ENTER when the result list appears.")
-        if not wait_for_continue():
-            return {"status": "Not found"}
+        print("LNI Verify loaded. Use the search box to look up the contractor.")
 
+        if not wait_for_user():
+            return []
+
+        list_url = driver.current_url
         list_path = os.path.join(TEMP_HTML_DIR, "lni_list.html")
         with open(list_path, "w", encoding="utf-8") as f:
             f.write(driver.page_source)
-        print(f"✅ Saved contractor list HTML to: {list_path}")
+        print(f"✅ Saved list page to {list_path}")
 
-        list_url = driver.current_url
-        contractors = []
-
-        result_divs = driver.find_elements(By.CSS_SELECTOR, "div.resultItem")
-        if not result_divs:
-            print("ℹ️  No LNI contractor results found.")
+        results = driver.find_elements(By.CSS_SELECTOR, "div.resultItem")
+        if not results:
+            print("⚠️ No contractor results found.")
             return []
 
-        for idx in range(len(result_divs)):
-            try:
-                print(f"\n➡️  Navigating to contractor detail page #{idx + 1}...")
+        contractor_data = []
 
-                result_divs = driver.find_elements(By.CSS_SELECTOR, "div.resultItem")
-                if idx >= len(result_divs):
-                    print(f"⚠️  Skipping contractor #{idx + 1}: DOM changed or index out of bounds.")
+        for idx in range(len(results)):
+            try:
+                print(f"\n➡️ Navigating to detail page #{idx + 1}")
+                results = driver.find_elements(By.CSS_SELECTOR, "div.resultItem")
+                if idx >= len(results):
                     break
 
-                contractor_elem = result_divs[idx]
-                driver.execute_script("arguments[0].scrollIntoView(true);", contractor_elem)
-                contractor_elem.click()
+                el = results[idx]
+                driver.execute_script("arguments[0].scrollIntoView(true);", el)
+                time.sleep(1)
+                el.click()
 
+                # Wait for detail content to load
                 WebDriverWait(driver, 10).until(
                     EC.presence_of_element_located((By.ID, "layoutContainer"))
                 )
-                time.sleep(5)
+                time.sleep(2)
 
                 html = driver.page_source
-                detail_path = os.path.join(TEMP_HTML_DIR, f"lni_detail_{idx + 1}.html")
-                with open(detail_path, "w", encoding="utf-8") as f:
-                    print(f"🪶 Writing detail HTML to: {detail_path}")
+                html_path = os.path.join(TEMP_HTML_DIR, f"lni_detail_{idx + 1}.html")
+                with open(html_path, "w", encoding="utf-8") as f:
                     f.write(html)
-                print(f"✅ Saved contractor detail HTML #{idx + 1} to: {detail_path}")
+                print(f"✅ Saved detail page to {html_path}")
 
-                with open(list_path, "r", encoding="utf-8") as list_file:
-                    list_html = list_file.read()
-
-                parsed_list = get_lni_info_from_html(list_html, [html])
-                if parsed_list:
-                    contractors.extend(parsed_list)
+                parsed = parse_lni_detail_html(html)
+                contractor_data.append(parsed)
 
             except TimeoutException:
-                print(f"⚠️  Contractor detail page #{idx + 1} failed to load expected content.")
-            except (StaleElementReferenceException, WebDriverException) as e:
-                print(f"⚠️  Contractor #{idx + 1} navigation error: {e}")
+                print(f"⚠️ Timeout on detail page #{idx + 1}")
+            except StaleElementReferenceException:
+                print(f"⚠️ StaleElementReference on page #{idx + 1}")
             finally:
                 driver.get(list_url)
-                try:
-                    WebDriverWait(driver, 10).until(
-                        EC.presence_of_element_located((By.CSS_SELECTOR, "div.resultItem"))
-                    )
-                except TimeoutException:
-                    print("⚠️  Could not return to result list from detail page.")
-                    break
+                WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "div.resultItem"))
+                )
+                time.sleep(2)
 
-        return contractors
+        return contractor_data
 
     except Exception as e:
-        print(f"🚨 LNI navigation error: {e}")
-        return {"status": "error"}
+        print(f"🚨 Error navigating LNI: {e}")
+        return []
 
 
-def get_lni_info_from_html(list_html: str, detail_htmls: list[str]) -> list[dict]:
-    contractors = []
-    list_soup = BeautifulSoup(list_html, "html.parser")
-    print(f"Found {len(list_soup.select('div.resultItem'))} contractor result(s).")
+def parse_lni_detail_html(html):
+    soup = BeautifulSoup(html, "html.parser")
+    result = {}
 
-    for idx, detail_html in enumerate(detail_htmls):
-        soup = BeautifulSoup(detail_html, "html.parser")
-        info = {}
+    def extract_kv(label_text):
+        row = soup.find("td", string=re.compile(label_text, re.I))
+        if row and row.find_next_sibling("td"):
+            return row.find_next_sibling("td").get_text(strip=True)
+        return None
 
-        contractor_name_tag = soup.select_one("div.hdrText")
-        contractor_name = contractor_name_tag.get_text(strip=True) if contractor_name_tag else f"Contractor #{idx + 1}"
-        print(f"\n📄 {contractor_name} Detail Page:")
+    result["Registration Number"] = extract_kv("Registration #")
+    result["License Suspended"] = extract_kv("License Suspended")
+    result["Insurance Company"] = extract_kv("Insurance Company")
+    result["Insurance Amount"] = extract_kv("Insurance Amount")
 
-        for table in soup.select("table"):
-            for row in table.select("tr"):
-                cols = row.find_all("td")
-                if len(cols) >= 2:
-                    label = cols[0].get_text(strip=True).rstrip(":")
-                    value = cols[1].get_text(strip=True)
+    # Bond Info
+    result["Bonds"] = []
+    for h4 in soup.find_all("h4", string=re.compile("Bond Information", re.I)):
+        table = h4.find_next("table")
+        if table:
+            for row in table.select("tr")[1:]:
+                tds = row.find_all("td")
+                if len(tds) >= 3:
+                    result["Bonds"].append({
+                        "Bonding Company": tds[0].get_text(strip=True),
+                        "Bond Number": tds[1].get_text(strip=True),
+                        "Amount": tds[2].get_text(strip=True),
+                    })
 
-                    if "Registration #" in label:
-                        info["Registration Number"] = value
-                    elif "License Suspended" in label:
-                        info["License Suspended"] = value
-                    elif "Insurance Company" in label:
-                        info["Insurance Company"] = value
-                    elif "Insurance Amount" in label:
-                        info["Insurance Amount"] = value
+    # Lawsuits
+    result["Lawsuits"] = []
+    for h4 in soup.find_all("h4", string=re.compile("Lawsuits", re.I)):
+        table = h4.find_next("table")
+        if table:
+            for row in table.select("tr")[1:]:
+                tds = row.find_all("td")
+                if len(tds) >= 4:
+                    result["Lawsuits"].append({
+                        "Case Number": tds[0].get_text(strip=True),
+                        "County": tds[1].get_text(strip=True),
+                        "Parties": tds[2].get_text(strip=True),
+                        "Status": tds[3].get_text(strip=True),
+                    })
 
-        bonds = []
-        for h4 in soup.find_all("h4", string=re.compile("Bond Information", re.I)):
-            bond_table = h4.find_next("table")
-            if bond_table:
-                for row in bond_table.select("tr")[1:]:
-                    cols = [td.get_text(strip=True) for td in row.select("td")]
-                    if len(cols) >= 3:
-                        bonds.append({
-                            "Bonding Company": cols[0],
-                            "Bond Number": cols[1],
-                            "Amount": cols[2],
-                        })
-        if bonds:
-            info["Bonds"] = bonds
-
-        lawsuits = []
-        for h4 in soup.find_all("h4", string=re.compile("Lawsuits", re.I)):
-            lawsuit_table = h4.find_next("table")
-            if lawsuit_table:
-                for row in lawsuit_table.select("tr")[1:]:
-                    cols = [td.get_text(strip=True) for td in row.select("td")]
-                    if len(cols) >= 4:
-                        lawsuits.append({
-                            "Case Number": cols[0],
-                            "County": cols[1],
-                            "Parties": cols[2],
-                            "Status": cols[3],
-                        })
-        if lawsuits:
-            info["Lawsuits"] = lawsuits
-
-        if info:
-            contractors.append(info)
-            for key, val in info.items():
-                if isinstance(val, list):
-                    print(f"  {key}: {len(val)} item(s)")
-                    for item in val:
-                        print(f"    • {item}")
-                else:
-                    print(f"  {key}: {val}")
-        else:
-            print("⚠️  No contractor data extracted from this page.")
-
-    return contractors
+    return result

@@ -239,59 +239,61 @@ def get_lni_info_from_html(list_html: str, detail_htmls: list[str]) -> list[dict
         soup = BeautifulSoup(detail_html, "html.parser")
         info = {}
 
-        # Get contractor name for header
-        name_tag = soup.select_one("div.hdrText")
-        contractor_name = name_tag.get_text(strip=True) if name_tag else f"Contractor #{idx + 1}"
+        contractor_name_tag = soup.select_one("div.hdrText")
+        contractor_name = contractor_name_tag.get_text(strip=True) if contractor_name_tag else f"Contractor #{idx + 1}"
         print(f"\n📄 {contractor_name} Detail Page:")
 
-        for section in soup.select("div.contractorDetailSection"):
-            for row in section.select("tr"):
-                label = row.select_one("div.labelText")
-                if not label:
-                    continue
-                label_text = label.get_text(strip=True).rstrip(":")
-                value_td = row.select_one("td:nth-of-type(2)")
-                value_text = value_td.get_text(strip=True) if value_td else ""
+        # --- Simple key-value rows ---
+        for table in soup.select("table"):
+            for row in table.select("tr"):
+                cols = row.find_all("td")
+                if len(cols) >= 2:
+                    label = cols[0].get_text(strip=True).rstrip(":")
+                    value = cols[1].get_text(strip=True)
 
-                # Match fields of interest
-                if "Registration #" in label_text:
-                    info["Registration Number"] = value_text
-                elif "License Suspended" in label_text:
-                    info["License Suspended"] = value_text
-                elif "Insurance Company" in label_text:
-                    info["Insurance Company"] = value_text
-                elif "Insurance Amount" in label_text:
-                    info["Insurance Amount"] = value_text
+                    if "Registration #" in label:
+                        info["Registration Number"] = value
+                    elif "License Suspended" in label:
+                        info["License Suspended"] = value
+                    elif "Insurance Company" in label:
+                        info["Insurance Company"] = value
+                    elif "Insurance Amount" in label:
+                        info["Insurance Amount"] = value
 
-        # Bonds — these are usually in their own section
+        # --- Bonds ---
         bonds = []
-        for bond_table in soup.select("table.bondTable"):
-            for row in bond_table.select("tr")[1:]:  # Skip header
-                cols = [td.get_text(strip=True) for td in row.select("td")]
-                if len(cols) >= 3:
-                    bonds.append({
-                        "Bonding Company": cols[0],
-                        "Bond Number": cols[1],
-                        "Amount": cols[2]
-                    })
+        for h4 in soup.find_all("h4", string=re.compile("Bond Information", re.I)):
+            bond_table = h4.find_next("table")
+            if bond_table:
+                for row in bond_table.select("tr")[1:]:
+                    cols = [td.get_text(strip=True) for td in row.select("td")]
+                    if len(cols) >= 3:
+                        bonds.append({
+                            "Bonding Company": cols[0],
+                            "Bond Number": cols[1],
+                            "Amount": cols[2],
+                        })
         if bonds:
             info["Bonds"] = bonds
 
-        # Lawsuits
+        # --- Lawsuits ---
         lawsuits = []
-        for lawsuit_table in soup.select("table.lawsuitTable"):
-            for row in lawsuit_table.select("tr")[1:]:
-                cols = [td.get_text(strip=True) for td in row.select("td")]
-                if len(cols) >= 4:
-                    lawsuits.append({
-                        "Case Number": cols[0],
-                        "County": cols[1],
-                        "Parties": cols[2],
-                        "Status": cols[3]
-                    })
+        for h4 in soup.find_all("h4", string=re.compile("Lawsuits", re.I)):
+            lawsuit_table = h4.find_next("table")
+            if lawsuit_table:
+                for row in lawsuit_table.select("tr")[1:]:
+                    cols = [td.get_text(strip=True) for td in row.select("td")]
+                    if len(cols) >= 4:
+                        lawsuits.append({
+                            "Case Number": cols[0],
+                            "County": cols[1],
+                            "Parties": cols[2],
+                            "Status": cols[3],
+                        })
         if lawsuits:
             info["Lawsuits"] = lawsuits
 
+        # --- Output Summary ---
         if info:
             contractors.append(info)
             for key, val in info.items():

@@ -1,7 +1,7 @@
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
-from config import CHROME_BINARY, CHROMEDRIVER_BINARY
+from .config import CHROME_BINARY, CHROMEDRIVER_BINARY
 
 def init_driver():
     options = Options()

@@ -1,4 +1,38 @@
 # lni.py
+# lni.py defines utilities that are imported to / called from main.py, which
+# provides it a chromedriver and UBI number.
+# It waits for teh user to fill out the form and navigate to the list of results,
+# where it then gets control returned to it and automatically navigates to each
+# result to scrape the necessary information, which it then returns as a dict for 
+# output to the console.
+
+# lni.py is not responsible for writing information to a PDF, and is not reliant on 
+# HTML tags to navigate the data, which is on a javascript page
+
+# # LNI contractor detail pages now load and extract structured data automatically. The script:
+#     Clicks each contractor result element directly.
+#     Waits for expected detail content.
+#     Saves each page's HTML for debug.
+#     Returns to the saved result list URL (instead of using a brittle back button).
+# Extracts:
+#     Registration number
+#     Bond(s) (company, number, amount)
+#     Insurance (company, amount)
+#     License suspension status
+#     Lawsuits (case number, county, parties, status)
+
+#     from the LNI:
+#     - Contractors registration number 
+#     - bond company, amount, and bond number (sometimes there are more than one)
+#     - Insurance company and amount
+#     - if contractors license is suspended
+#     - any active lawsuits against the bond, case number, county, parites, status 
+
+#     Department of Revenue
+#     - Entity name
+#     - Business name
+#     - Trade names, if any
+#     - Governors
 import os
 import re
 import time

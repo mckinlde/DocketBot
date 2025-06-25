@@ -1,1 +1,19 @@
 You're now working in a /scripts/FavoriteButton/zipped_version; when you send me a zipped folder I'll extract it into that destination and run the code to tell you if/how it worked.  If you need to save temp_html_files like we're doing already you can, and I can upload those to help you debug as you write the code to implement the FavoriteButton spec (using a UBI, get info from the 3 agency websites with user interaction as needed, and fill the PDF accordingly)
+
+scripts/FavoriteButton/zipped_version/
+├── __init__.py
+├── main.py
+├── config.py
+├── utils.py
+├── lni.py
+├── sos.py
+├── dor.py
+├── pdf_generator.py
+├── data/
+│   └── (temp HTML or PDFs saved here)
+├── assets/
+│   └── 0000 New Matter Form.pdf
+├── chrome-win64/
+│   └── chrome.exe
+├── chromedriver-win64/
+│   └── chromedriver.exe

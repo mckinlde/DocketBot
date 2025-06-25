@@ -1,4 +1,11 @@
 # sos.py
+#     From the secretary of state's corporate lookup:
+#     - company name
+#     - company addresses, mailing, and street
+#     - if the company is currently active, and if not, the date of their inactivity
+#     - Name of registered agent, and registered agent mailing and street address
+#     - Governor names
+
 from selenium.webdriver.common.by import By
 from scripts.common import wait_for_continue
 

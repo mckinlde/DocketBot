@@ -4,12 +4,7 @@
 # scrapes the list and each contractor detail page.
 # Returns list of dicts with contractor info.
 # Not responsible for writing PDFs — returns data to caller.
-# lni.py
-# Scrapes LNI contractor data given a driver and UBI number.
-# Navigates to the contractor search site, fills out the UBI form,
-# scrapes the list and each contractor detail page.
-# Returns list of dicts with contractor info.
-# Not responsible for writing PDFs — returns data to caller.
+# lni.py — Updated to click div.resultItem (not <a>) and scrape correct contractor detail
 
 import os
 import time
@@ -39,8 +34,8 @@ def navigate_lni(driver, ubi):
         print("⏳ Waiting for search type dropdown...")
         WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "selSearchType")))
         time.sleep(1)
-        print("✅ Search type dropdown visible")
 
+        print("✅ Search type dropdown visible")
         select_element = Select(driver.find_element(By.ID, "selSearchType"))
         select_element.select_by_value("Ubi")
 
@@ -105,34 +100,21 @@ def get_lni_contractors(driver):
     print("🔍 Parsing search results page...")
     contractors = []
 
-    # Cache initial list HTML to extract result count
-    initial_html = driver.page_source
-    soup = BeautifulSoup(initial_html, "html.parser")
+    soup = BeautifulSoup(driver.page_source, "html.parser")
     result_items = soup.select("div.resultItem")
     print(f"📦 Initial contractor count: {len(result_items)}")
-    save_html(initial_html, "lni_list.html")
+    save_html(driver.page_source, "lni_list.html")
     save_screenshot(driver, "lni_list.png")
-
-    # Use fixed URL to reload search page instead of fragile back button
-    search_results_url = driver.current_url
 
     for i in range(len(result_items)):
         try:
             print(f"\n➡️ Clicking contractor result #{i+1}...")
+            elements = driver.find_elements(By.CSS_SELECTOR, "div.resultItem")
+            driver.execute_script("arguments[0].click();", elements[i])
 
-            # Re-load the list page before each iteration
-            driver.get(search_results_url)
+            print("⏳ Waiting for detail panel to load...")
             WebDriverWait(driver, 10).until(
-                EC.presence_of_all_elements_located((By.CSS_SELECTOR, "div.resultItem"))
-            )
-            time.sleep(1)
-
-            result_elements = driver.find_elements(By.CSS_SELECTOR, "div.resultItem")
-            driver.execute_script("arguments[0].click();", result_elements[i])
-
-            print("⏳ Waiting for detail page to load...")
-            WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.CLASS_NAME, "contractorHeader"))
+                EC.presence_of_element_located((By.ID, "contractorDetail"))
             )
             time.sleep(1)
 
@@ -143,6 +125,11 @@ def get_lni_contractors(driver):
             parsed = parse_contractor_html(html)
             contractors.append(parsed)
             print(f"✅ Parsed contractor #{i+1}: {parsed.get('Contractor Name', 'Unnamed')}")
+
+            print("🔙 Returning to results list...")
+            driver.back()
+            WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "body")))
+            time.sleep(1)
 
         except Exception as e:
             print(f"⚠️ Failed to scrape contractor #{i+1}: {e}")

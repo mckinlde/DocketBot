@@ -6,13 +6,12 @@
 # Not responsible for writing PDFs — returns data to caller.
 # lni.py — Updated to click div.resultItem (not <a>) and scrape correct contractor detail
 
-# lni.py – Final working version
+# lni.py — Final fixed version (click logic + parser hardened)
 import os
 import time
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.action_chains import ActionChains
 from bs4 import BeautifulSoup
 
 TEMP_DIR = os.path.join(os.path.dirname(__file__), "../temp_html_files")
@@ -33,12 +32,15 @@ def navigate_lni(driver, ubi):
     print("🌐 Navigating to LNI...")
     try:
         driver.get("https://secure.lni.wa.gov/verify/")
+        print("⏳ Waiting for search type dropdown...")
         WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "selSearchType")))
         time.sleep(1)
 
-        print("✅ Dropdown loaded")
-        Select(driver.find_element(By.ID, "selSearchType")).select_by_value("Ubi")
+        print("✅ Search type dropdown visible")
+        select_element = Select(driver.find_element(By.ID, "selSearchType"))
+        select_element.select_by_value("Ubi")
 
+        print("⏳ Waiting for UBI input field...")
         WebDriverWait(driver, 10).until(EC.visibility_of_element_located((By.ID, "txtSearchBy")))
         time.sleep(1)
 
@@ -47,23 +49,26 @@ def navigate_lni(driver, ubi):
         driver.execute_script("document.getElementById('txtSearchBy').dispatchEvent(new Event('blur'));")
         time.sleep(1)
 
-        print("🖱️ Submitting form...")
+        print("🖱️ Clicking Search button...")
         driver.execute_script("arguments[0].click();", driver.find_element(By.ID, "searchButton"))
+
+        print("⏳ Waiting for search results body...")
         WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "body")))
         time.sleep(1)
 
         error_div = driver.find_element(By.ID, "valMsg")
         if error_div.is_displayed() and error_div.text.strip():
             msg = error_div.text.strip()
-            print(f"⚠️ Validation error: {msg}")
+            print(f"⚠️ Validation error on page: {msg}")
             save_html(driver.page_source, "lni_error_post_submit.html")
             save_screenshot(driver, "lni_error_post_submit.png")
             return False
 
-        print("✅ Results page loaded")
+        print("✅ Search results loaded")
         return True
+
     except Exception as e:
-        print("🚨 Navigation error:", e)
+        print("🚨 Exception during navigation:", e)
         save_html(driver.page_source, "error_navigate_lni.html")
         save_screenshot(driver, "error_navigate_lni.png")
         return False
@@ -73,10 +78,11 @@ def parse_contractor_html(html):
     data = {}
 
     def get_field(label):
-        cell = soup.find("td", string=lambda s: s and label.lower() in s.lower())
-        if cell and cell.find_next_sibling("td"):
-            return cell.find_next_sibling("td").get_text(strip=True)
-        return None
+        try:
+            cell = soup.find("td", string=lambda s: s and label.lower() in s.lower())
+            return cell.find_next_sibling("td").get_text(strip=True) if cell and cell.find_next_sibling("td") else None
+        except Exception:
+            return None
 
     def get_by_id(element_id):
         el = soup.find(id=element_id)
@@ -94,39 +100,54 @@ def parse_contractor_html(html):
     return data
 
 def get_lni_contractors(driver):
-    print("🔍 Extracting contractors from list...")
+    print("🔍 Parsing search results page...")
     contractors = []
 
-    WebDriverWait(driver, 10).until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, "div.resultItem")))
-    result_items = driver.find_elements(By.CSS_SELECTOR, "div.resultItem")
-
+    soup = BeautifulSoup(driver.page_source, "html.parser")
+    result_items = soup.select("div.resultItem")
+    print(f"📦 Initial contractor count: {len(result_items)}")
     save_html(driver.page_source, "lni_list.html")
     save_screenshot(driver, "lni_list.png")
-    print(f"📦 Found {len(result_items)} contractor(s)")
 
-    for i, item in enumerate(result_items):
+    for i in range(len(result_items)):
         try:
-            print(f"\n➡️ Expanding contractor #{i+1}...")
-            driver.execute_script("arguments[0].scrollIntoView(true);", item)
-            ActionChains(driver).move_to_element(item).click().perform()
+            print(f"\n➡️ Clicking contractor result #{i+1}...")
+            elements = driver.find_elements(By.CSS_SELECTOR, "div.resultItem")
+            if i >= len(elements):
+                print(f"⚠️ Element index {i} out of range")
+                continue
 
-            WebDriverWait(item, 5).until(
-                lambda d: item.find_element(By.CLASS_NAME, "contractorDetails").is_displayed()
+            el = elements[i]
+            driver.execute_script("arguments[0].scrollIntoView(true);", el)
+            WebDriverWait(driver, 10).until(EC.visibility_of(el))
+            time.sleep(0.5)
+
+            try:
+                el.click()
+            except:
+                driver.execute_script("arguments[0].click();", el)
+
+            print("⏳ Waiting for contractor detail panel...")
+            WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.ID, "contractorDetail"))
             )
             time.sleep(1)
 
-            html = item.get_attribute("innerHTML")
-            html_wrapped = f"<html><body>{html}</body></html>"
-
-            save_html(html_wrapped, f"lni_detail_{i+1}.html")
+            html = driver.page_source
+            save_html(html, f"lni_detail_{i+1}.html")
             save_screenshot(driver, f"lni_detail_{i+1}.png")
 
-            parsed = parse_contractor_html(html_wrapped)
+            parsed = parse_contractor_html(html)
             contractors.append(parsed)
             print(f"✅ Parsed contractor #{i+1}: {parsed.get('Contractor Name', 'Unnamed')}")
 
+            print("🔙 Returning to results list...")
+            driver.back()
+            WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "body")))
+            time.sleep(1)
+
         except Exception as e:
-            print(f"⚠️ Error parsing contractor #{i+1}: {e}")
+            print(f"⚠️ Failed to scrape contractor #{i+1}: {e}")
             save_html(driver.page_source, f"error_detail_{i+1}.html")
             save_screenshot(driver, f"error_detail_{i+1}.png")
 

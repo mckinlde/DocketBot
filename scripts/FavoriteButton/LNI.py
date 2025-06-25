@@ -38,14 +38,14 @@ def navigate_lni(driver, ubi):
         select_element.select_by_value("Ubi")
 
         print("⏳ Waiting for UBI input field...")
-        input_box = WebDriverWait(driver, 10).until(
-            EC.visibility_of_element_located((By.ID, "txtSearchBy"))
-        )
+        WebDriverWait(driver, 10).until(EC.visibility_of_element_located((By.ID, "txtSearchBy")))
         time.sleep(1)
 
-        input_box.clear()
-        input_box.send_keys(ubi)
-        print(f"✅ UBI '{ubi}' entered")
+        # Use JavaScript to safely enter UBI and trigger validation
+        print(f"⌨️ Entering UBI: {ubi}")
+        driver.execute_script(f"document.getElementById('txtSearchBy').value = '{ubi}';")
+        driver.execute_script("document.getElementById('txtSearchBy').dispatchEvent(new Event('blur'));")
+        time.sleep(1)
 
         print("🖱️ Clicking Search button...")
         driver.execute_script("arguments[0].click();", driver.find_element(By.ID, "searchButton"))
@@ -100,16 +100,14 @@ def get_lni_contractors(driver):
     print("🔍 Parsing search results page...")
     contractors = []
 
-    # Snapshot 1: raw contractor list page
     soup = BeautifulSoup(driver.page_source, "html.parser")
     result_items = soup.select("div.resultItem")
     print(f"📦 Initial contractor count: {len(result_items)}")
     save_html(driver.page_source, "lni_list.html")
     save_screenshot(driver, "lni_list.png")
 
-    # Defensive re-fetch if none found
     if not result_items:
-        print("⚠️ No contractor items found; retrying after brief wait...")
+        print("⚠️ No contractor items found; retrying after wait...")
         time.sleep(2)
         soup = BeautifulSoup(driver.page_source, "html.parser")
         result_items = soup.select("div.resultItem")

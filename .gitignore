@@ -27,6 +27,7 @@ Thumbs.db
 # Ignore logs, temp files
 *.log
 *.tmp
+temp_html_files/
 
 # Editor/project-specific
 .vscode/

@@ -33,17 +33,22 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 
-from lni_scraper import get_lni_info
+from LNI import get_lni_info
 # from sos_scraper import get_sos_info  # To be implemented
 # from dor_scraper import get_dor_info  # To be implemented
 # from fill_pdf import fill_pdf         # To be implemented
 
-# CONFIG
-BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+
+# --- CONFIG ---
+SCRIPT_PATH = os.path.abspath(__file__)
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 CHROME_BINARY = os.path.join(BASE_DIR, "chrome-win64", "chrome.exe")
 CHROMEDRIVER_BINARY = os.path.join(BASE_DIR, "chromedriver-win64", "chromedriver.exe")
+PDF_TEMPLATE = os.path.join(BASE_DIR, "assets", "0000 New Matter Form.pdf")
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+if not os.path.exists(OUTPUT_DIR):
+    os.makedirs(OUTPUT_DIR)
 
 
 # UTILS

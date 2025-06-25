@@ -68,7 +68,7 @@ from pypdf import PdfReader, PdfWriter
 PARTIES_PER_PAGE = 9
 
 # -- Configurable Chrome paths
-BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 def resource_path(rel): return os.path.join(BASE_DIR, rel)
 CHROME_BINARY = resource_path("chrome-win64/chrome.exe")
 CHROMEDRIVER_BINARY = resource_path("chromedriver-win64/chromedriver.exe")
@@ -131,7 +131,7 @@ def fill_pdf(sos, lni, dor, output_path):
     for suit in lni.get("lawsuits", []):
         fields["parties"].append({"name": suit["parties"], "desc": f"Lawsuit in {suit['county']}", "assoc": f"{suit['case_number']} - {suit['status']}"})
 
-    reader = PdfReader(resource_path("assets/000 New Matter Form.pdf"))
+    reader = PdfReader(os.path.join(BASE_DIR, "assets", "000 New Matter Form.pdf"))
     writer = PdfWriter()
     total_pages = (len(fields["parties"]) + PARTIES_PER_PAGE - 1) // PARTIES_PER_PAGE or 1
     for i in range(total_pages):

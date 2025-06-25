@@ -76,6 +76,7 @@ from pypdf import PdfReader, PdfWriter
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from io import BytesIO
+import re
 
 # --- CONFIG ---
 SCRIPT_PATH = os.path.abspath(__file__)
@@ -156,7 +157,6 @@ def get_lni_info(driver, ubi):
             f.write(driver.page_source)
         print(f"✅ Saved contractor list HTML to: {list_path}")
 
-        # Save current list page URL
         list_url = driver.current_url
 
         result_divs = driver.find_elements(By.CSS_SELECTOR, "div.resultItem")
@@ -168,7 +168,6 @@ def get_lni_info(driver, ubi):
 
         for idx in range(len(result_divs)):
             result_divs = driver.find_elements(By.CSS_SELECTOR, "div.resultItem")
-
             if idx >= len(result_divs):
                 print(f"⚠️  Skipping contractor #{idx + 1}: DOM changed or index out of bounds.")
                 break
@@ -179,10 +178,17 @@ def get_lni_info(driver, ubi):
 
             try:
                 WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.XPATH, "//label[contains(text(),'Registration #')]"))
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "div.contractorDetailDiv"))
                 )
-            except:
-                print(f"⚠️  Contractor detail page #{idx + 1} failed to load expected content.")
+
+                # Confirm detail panel is not collapsed
+                detail_div = driver.find_element(By.CSS_SELECTOR, "div.contractorDetailDiv")
+                if "display: none" in detail_div.get_attribute("style"):
+                    print(f"⚠️  Contractor detail page #{idx + 1} is collapsed or empty.")
+                    continue
+
+            except Exception as e:
+                print(f"⚠️  Contractor detail page #{idx + 1} failed to load expected content: {e}")
                 continue
 
             detail_path = os.path.join(temp_dir, f"lni_detail_{idx + 1}.html")
@@ -196,7 +202,6 @@ def get_lni_info(driver, ubi):
                 if parsed and isinstance(parsed, list) and parsed[0]:
                     contractors.append(parsed[0])
 
-            # Instead of back button, return to list URL and wait for results
             driver.get(list_url)
             try:
                 WebDriverWait(driver, 10).until(
@@ -215,31 +220,34 @@ def get_lni_info(driver, ubi):
 
 def get_lni_info_from_html(list_html: str, detail_htmls: list[str]) -> list[dict]:
     contractors = []
-
     print("\n🔧 Parsing LNI Result List Page")
     list_soup = BeautifulSoup(list_html, "html.parser")
     result_links = list_soup.select("a[href*='Detail.aspx']")
     print(f"Found {len(result_links)} contractor result(s).")
 
     for idx, detail_html in enumerate(detail_htmls):
-        print(f"\n📄 Contractor #{idx + 1} Detail Page:")
         soup = BeautifulSoup(detail_html, "html.parser")
         info = {}
 
-        # Expand contract section if collapsed
+        # Get contractor name for header
+        name_tag = soup.select_one("div.hdrText")
+        contractor_name = name_tag.get_text(strip=True) if name_tag else f"Contractor #{idx + 1}"
+        print(f"\n📄 {contractor_name} Detail Page:")
+
+        # Check if contractorDetailDiv is visible
         hidden = soup.select_one("div.contractorDetailDiv[style*='display: none']")
         if hidden:
-            print("⚠️  Detail appears collapsed in HTML — please ensure 'Expand Detail' was clicked before saving.")
+            print("⚠️  Detail appears collapsed in HTML — skipping.")
             continue
 
         # Registration Number
-        reg_label = soup.find("label", string=lambda s: s and "Registration #" in s)
-        if reg_label:
-            reg_val = reg_label.find_next("span").get_text(strip=True)
+        reg_td = soup.find("td", string=re.compile("Registration #", re.I))
+        if reg_td:
+            reg_val = reg_td.find_next("td").get_text(strip=True)
             info["Registration Number"] = reg_val
 
         # Bond Info
-        bond_section = soup.find("h4", string=lambda s: s and "Bond Information" in s)
+        bond_section = soup.find("h4", string=re.compile("Bond Information", re.I))
         if bond_section:
             bond_table = bond_section.find_next("table")
             if bond_table:
@@ -255,7 +263,7 @@ def get_lni_info_from_html(list_html: str, detail_htmls: list[str]) -> list[dict
                 info["Bonds"] = bonds
 
         # Insurance Info
-        ins_section = soup.find("h4", string=lambda s: s and "Insurance Information" in s)
+        ins_section = soup.find("h4", string=re.compile("Insurance Information", re.I))
         if ins_section:
             ins_table = ins_section.find_next("table")
             if ins_table:
@@ -266,14 +274,14 @@ def get_lni_info_from_html(list_html: str, detail_htmls: list[str]) -> list[dict
                         info["Insurance Company"] = ins_cols[0]
                         info["Insurance Amount"] = ins_cols[2] if len(ins_cols) > 2 else ""
 
-        # License Suspension Status
-        status_label = soup.find("label", string=lambda s: s and "License" in s and "Suspended" in s)
-        if status_label:
-            status_val = status_label.find_next("span").get_text(strip=True)
+        # License Suspension
+        status_td = soup.find("td", string=re.compile("License.*Suspended", re.I))
+        if status_td:
+            status_val = status_td.find_next("td").get_text(strip=True)
             info["License Suspended"] = status_val
 
-        # Lawsuits / Bond Claims
-        lawsuit_section = soup.find("h4", string=lambda s: s and "Lawsuits" in s)
+        # Lawsuits
+        lawsuit_section = soup.find("h4", string=re.compile("Lawsuits", re.I))
         if lawsuit_section:
             lawsuit_table = lawsuit_section.find_next("table")
             if lawsuit_table:

@@ -59,6 +59,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from bs4 import BeautifulSoup
 from pypdf import PdfReader, PdfWriter
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
@@ -129,15 +130,128 @@ def get_sos_info(driver, ubi):
 
 def get_lni_info(driver):
     try:
+        temp_dir = os.path.join(BASE_DIR, "temp_html_files")
+        os.makedirs(temp_dir, exist_ok=True)
+
+        # Load the LNI search page
         driver.get("https://secure.lni.wa.gov/verify/")
-        print("LNI loaded. Press ENTER after page settles.", end="")
+        print("LNI loaded. Use the search box to look up the contractor. Press ENTER when the result list appears.")
         if not wait_for_continue():
             return {"status": "Not found"}
 
-        return {"status": "Not implemented"}
+        # Save result list HTML
+        list_html_path = os.path.join(temp_dir, "lni_list.html")
+        with open(list_html_path, "w", encoding="utf-8") as f:
+            f.write(driver.page_source)
+        print(f"✅ Saved contractor list HTML to: {list_html_path}")
+
+        detail_htmls = []
+        idx = 1
+        while True:
+            print(f"\n➡️  Navigate to contractor detail page #{idx}. Press ENTER to capture it, or ';' to finish.")
+            if not wait_for_continue():
+                break
+
+            detail_path = os.path.join(temp_dir, f"lni_detail_{idx}.html")
+            with open(detail_path, "w", encoding="utf-8") as f:
+                f.write(driver.page_source)
+            print(f"✅ Saved contractor detail HTML #{idx} to: {detail_path}")
+
+            with open(detail_path, "r", encoding="utf-8") as f:
+                detail_htmls.append(f.read())
+            idx += 1
+
+        # Read list HTML
+        with open(list_html_path, "r", encoding="utf-8") as f:
+            list_html = f.read()
+
+        # Parse all captured contractor detail pages
+        return get_lni_info_from_html(list_html, detail_htmls)
+
     except Exception as e:
         print(f"LNI error: {e}")
         return {"status": "error"}
+
+
+def get_lni_info_from_html(list_html: str, detail_htmls: list[str]) -> list[dict]:
+    contractors = []
+
+    print("\n🔧 Parsing LNI Result List Page")
+    list_soup = BeautifulSoup(list_html, "html.parser")
+    result_links = list_soup.select("a[href*='Detail.aspx']")
+    print(f"Found {len(result_links)} contractor result(s).")
+
+    for idx, detail_html in enumerate(detail_htmls):
+        print(f"\n📄 Contractor #{idx + 1} Detail Page:")
+
+        soup = BeautifulSoup(detail_html, "html.parser")
+        info = {}
+
+        # Registration Number
+        reg_label = soup.find("label", string=lambda s: s and "Registration #" in s)
+        if reg_label:
+            reg_val = reg_label.find_next("span").get_text(strip=True)
+            info["Registration Number"] = reg_val
+
+        # Bond Info
+        bond_section = soup.find("h4", string=lambda s: s and "Bond Information" in s)
+        if bond_section:
+            bond_table = bond_section.find_next("table")
+            if bond_table:
+                bonds = []
+                for row in bond_table.select("tr")[1:]:
+                    cols = [col.get_text(strip=True) for col in row.select("td")]
+                    if cols:
+                        bonds.append({
+                            "Bonding Company": cols[0],
+                            "Bond Number": cols[1],
+                            "Amount": cols[2]
+                        })
+                info["Bonds"] = bonds
+
+        # Insurance Info
+        ins_section = soup.find("h4", string=lambda s: s and "Insurance Information" in s)
+        if ins_section:
+            ins_table = ins_section.find_next("table")
+            if ins_table:
+                ins_row = ins_table.select_one("tr:nth-of-type(2)")
+                if ins_row:
+                    ins_cols = [td.get_text(strip=True) for td in ins_row.select("td")]
+                    if ins_cols:
+                        info["Insurance Company"] = ins_cols[0]
+                        info["Insurance Amount"] = ins_cols[2] if len(ins_cols) > 2 else ""
+
+        # License Suspension Status
+        status_label = soup.find("label", string=lambda s: s and "License" in s and "Suspended" in s)
+        if status_label:
+            status_val = status_label.find_next("span").get_text(strip=True)
+            info["License Suspended"] = status_val
+
+        # Lawsuits / Bond Claims (if available)
+        lawsuit_section = soup.find("h4", string=lambda s: s and "Lawsuits" in s)
+        if lawsuit_section:
+            lawsuit_table = lawsuit_section.find_next("table")
+            if lawsuit_table:
+                lawsuits = []
+                for row in lawsuit_table.select("tr")[1:]:
+                    cols = [col.get_text(strip=True) for col in row.select("td")]
+                    if cols:
+                        lawsuits.append({
+                            "Case Number": cols[0],
+                            "County": cols[1],
+                            "Parties": cols[2],
+                            "Status": cols[3],
+                        })
+                info["Lawsuits"] = lawsuits
+
+        # Print summary
+        for key, val in info.items():
+            print(f"  {key}: {val if not isinstance(val, list) else f'{len(val)} item(s)'}")
+
+        contractors.append(info)
+
+    return contractors
+
 
 def get_dor_info(driver):
     try:

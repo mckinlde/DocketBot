@@ -128,45 +128,77 @@ def get_sos_info(driver, ubi):
         print(f"SOS error: {e}")
         return {"status": "error"}
 
-def get_lni_info(driver):
+def get_lni_info(driver, ubi):
     try:
-        temp_dir = os.path.join(BASE_DIR, "temp_html_files")
-        os.makedirs(temp_dir, exist_ok=True)
-
-        # Load the LNI search page
         driver.get("https://secure.lni.wa.gov/verify/")
         print("LNI loaded. Use the search box to look up the contractor. Press ENTER when the result list appears.")
         if not wait_for_continue():
             return {"status": "Not found"}
 
-        # Save result list HTML
-        list_html_path = os.path.join(temp_dir, "lni_list.html")
-        with open(list_html_path, "w", encoding="utf-8") as f:
-            f.write(driver.page_source)
-        print(f"✅ Saved contractor list HTML to: {list_html_path}")
+        # Save the list HTML
+        temp_dir = os.path.join(BASE_DIR, "temp_html_files")
+        os.makedirs(temp_dir, exist_ok=True)
 
-        detail_htmls = []
-        idx = 1
-        while True:
-            print(f"\n➡️  Navigate to contractor detail page #{idx}. Press ENTER to capture it, or ';' to finish.")
-            if not wait_for_continue():
+        list_path = os.path.join(temp_dir, "lni_list.html")
+        with open(list_path, "w", encoding="utf-8") as f:
+            f.write(driver.page_source)
+        print(f"✅ Saved contractor list HTML to: {list_path}")
+
+        result_divs = driver.find_elements(By.CSS_SELECTOR, "div.resultItem")
+        if not result_divs:
+            print("ℹ️  No LNI contractor results found.")
+            return []
+
+        contractors = []
+
+        for idx in range(len(result_divs)):
+            # Re-locate each time after navigation
+            result_divs = driver.find_elements(By.CSS_SELECTOR, "div.resultItem")
+
+            if idx >= len(result_divs):
+                print(f"⚠️  Skipping contractor #{idx + 1}: DOM changed or index out of bounds.")
                 break
 
-            detail_path = os.path.join(temp_dir, f"lni_detail_{idx}.html")
+            print(f"\n➡️  Navigating to contractor detail page #{idx + 1}...")
+            driver.execute_script("arguments[0].scrollIntoView(true);", result_divs[idx])
+            result_divs[idx].click()
+
+            # Wait for the detail page to load by looking for Registration #
+            try:
+                WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.XPATH, "//label[contains(text(),'Registration #')]"))
+                )
+            except:
+                print(f"⚠️  Contractor detail page #{idx + 1} failed to load expected content.")
+                continue
+
+            # Save the detail page
+            detail_path = os.path.join(temp_dir, f"lni_detail_{idx + 1}.html")
             with open(detail_path, "w", encoding="utf-8") as f:
                 f.write(driver.page_source)
-            print(f"✅ Saved contractor detail HTML #{idx} to: {detail_path}")
+            print(f"✅ Saved contractor detail HTML #{idx + 1} to: {detail_path}")
 
+            # Parse and collect data
             with open(detail_path, "r", encoding="utf-8") as f:
-                detail_htmls.append(f.read())
-            idx += 1
+                html = f.read()
+                parsed = get_lni_info_from_html("<stub_list>", [html])
+                if parsed and isinstance(parsed, list) and parsed[0]:
+                    contractors.append(parsed[0])
 
-        # Read list HTML
-        with open(list_html_path, "r", encoding="utf-8") as f:
-            list_html = f.read()
+            # Click "Back" to return to result list
+            try:
+                back_button = WebDriverWait(driver, 5).until(
+                    EC.element_to_be_clickable((By.ID, "backBtn"))
+                )
+                back_button.click()
+                WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "div.resultItem"))
+                )
+            except:
+                print("⚠️  Could not return to result list from detail page.")
+                break
 
-        # Parse all captured contractor detail pages
-        return get_lni_info_from_html(list_html, detail_htmls)
+        return contractors
 
     except Exception as e:
         print(f"LNI error: {e}")

@@ -399,7 +399,7 @@ def main():
 
     try:
         sos = get_sos_info(driver, ubi)
-        lni = get_lni_info(driver)
+        lni = get_lni_info(driver, ubi)
         dor = get_dor_info(driver)
     finally:
         driver.quit()

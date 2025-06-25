@@ -184,19 +184,26 @@ def get_lni_info(driver, ubi):
 
                 # Wait for a reliable anchor in the contractor detail page
                 WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.XPATH, "//h3[contains(text(), 'Contractor Information')]"))
+                    EC.presence_of_element_located((By.ID, "layoutContainer"))
                 )
-                time.sleep(0.5)  # slight buffer to ensure render
+                time.sleep(5)  # slight buffer to ensure render
 
                 html = driver.page_source
                 detail_path = os.path.join(temp_dir, f"lni_detail_{idx + 1}.html")
                 with open(detail_path, "w", encoding="utf-8") as f:
+                    print(f"🪶 Writing detail HTML to: {detail_path}")
                     f.write(html)
                 print(f"✅ Saved contractor detail HTML #{idx + 1} to: {detail_path}")
 
-                parsed = get_lni_info_from_html("<stub_list>", [html])
-                if parsed and isinstance(parsed, list) and parsed[0]:
-                    contractors.append(parsed[0])
+                # Load the list HTML from disk
+                with open(list_path, "r", encoding="utf-8") as list_file:
+                    list_html = list_file.read()
+
+                parsed_list = get_lni_info_from_html(list_html, [html])
+                if parsed_list:
+                    print("Extending contractor list")
+                    contractors.extend(parsed_list)
+
 
             except TimeoutException:
                 print(f"⚠️  Contractor detail page #{idx + 1} failed to load expected content.")
@@ -224,9 +231,10 @@ def get_lni_info_from_html(list_html: str, detail_htmls: list[str]) -> list[dict
     contractors = []
     print("\n🔧 Parsing LNI Result List Page")
     list_soup = BeautifulSoup(list_html, "html.parser")
-    result_links = list_soup.select("a[href*='Detail.aspx']")
-    print(f"Found {len(result_links)} contractor result(s).")
+    result_divs = list_soup.select("div.resultItem")
+    print(f"Found {len(result_divs)} contractor result(s).")
 
+    print("\n🔧 Parsing LNI Detail Pages")
     for idx, detail_html in enumerate(detail_htmls):
         soup = BeautifulSoup(detail_html, "html.parser")
         info = {}
@@ -263,6 +271,11 @@ def get_lni_info_from_html(list_html: str, detail_htmls: list[str]) -> list[dict
                             "Amount": cols[2]
                         })
                 info["Bonds"] = bonds
+
+        if not reg_td:
+            print("  ⚠️ Registration # not found")
+        if not bond_section:
+            print("  ⚠️ Bond Information not found")
 
         # Insurance Info
         ins_section = soup.find("h4", string=re.compile("Insurance Information", re.I))

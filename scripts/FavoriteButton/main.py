@@ -23,7 +23,7 @@
 # for the business in question before pressing ENTER to continue
 
 # From each page, it saves information, and then calls fill_pdf.py to write it to the PDF form.
-
+# main.py
 import os
 import sys
 import time
@@ -33,13 +33,8 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 
-from LNI import get_lni_info
-# from sos_scraper import get_sos_info  # To be implemented
-# from dor_scraper import get_dor_info  # To be implemented
-# from fill_pdf import fill_pdf         # To be implemented
+from LNI import navigate_lni, get_lni_contractors
 
-
-# --- CONFIG ---
 SCRIPT_PATH = os.path.abspath(__file__)
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 CHROME_BINARY = os.path.join(BASE_DIR, "chrome-win64", "chrome.exe")
@@ -50,17 +45,12 @@ OUTPUT_DIR = os.path.join(BASE_DIR, "output")
 if not os.path.exists(OUTPUT_DIR):
     os.makedirs(OUTPUT_DIR)
 
-
-# UTILS
 def init_driver():
     options = Options()
     options.binary_location = CHROME_BINARY
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     return webdriver.Chrome(service=Service(CHROMEDRIVER_BINARY), options=options)
-
-
-# MAIN
 
 def main():
     if len(sys.argv) < 2:
@@ -73,28 +63,22 @@ def main():
     driver = init_driver()
 
     try:
-        # sos_info = get_sos_info(driver, ubi)
-        lni_info = get_lni_info(driver, ubi)
-        # dor_info = get_dor_info(driver, ubi)
+        if not navigate_lni(driver, ubi):
+            print("❌ LNI navigation failed. Please check the UBI and try again.")
+            return
+
+        contractors = get_lni_contractors(driver)
 
         print("\n✅ LNI Contractor Info:")
-        for contractor in lni_info:
-            print("\n--- Contractor ---")
-            for key, val in contractor.items():
-                if isinstance(val, list):
-                    print(f"{key}:")
-                    for item in val:
-                        print(f"  • {item}")
-                else:
-                    print(f"{key}: {val}")
+        for i, contractor in enumerate(contractors):
+            print(f"\n--- Contractor #{i + 1} ---")
+            for key, value in contractor.items():
+                print(f"{key}: {value}")
 
-        # output_filename = datetime.now().strftime("%Y-%m-%d Intake Form.pdf")
-        # output_path = os.path.join(OUTPUT_DIR, output_filename)
-        # fill_pdf(sos_info, lni_info, dor_info, output_path)
+        # fill_pdf(sos_info, contractors, dor_info, output_path)  # To be added
 
     finally:
         driver.quit()
-
 
 if __name__ == "__main__":
     main()

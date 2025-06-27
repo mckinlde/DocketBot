@@ -109,17 +109,19 @@ def open_lni_navigate_and_save_results_as_html(driver, ubi):
         list_url = driver.current_url
         contractor_detail_html_list = []
         result_divs = driver.find_elements(By.CSS_SELECTOR, "div.resultItem")
-        print(f"📦 Found {len(result_divs)} contractor(s)")
+        print(f"📦 Found {len(result_divs)} contractor(s): ")
+        for result_div in result_divs:
+            print(result_div)
         if not result_divs:
             print("ℹ️  No LNI contractor results found.")
             return []
+
+        # TODO: we may be able to end this function here and return the list of div.resultItems to use as static links
 
         # Click on the first contractor detail panel (already expanded)
         for idx in range(len(result_divs)):
             try:
                 print(f"\n➡️  Navigating to contractor detail page #{idx + 1}...")
-
-                result_divs = driver.find_elements(By.CSS_SELECTOR, "div.resultItem")
                 if idx >= len(result_divs):
                     print(f"⚠️  Skipping contractor #{idx + 1}: DOM changed or index out of bounds.")
                     break

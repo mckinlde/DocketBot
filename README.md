@@ -4,6 +4,8 @@ DocketBot is a lightweight desktop application for downloading, organizing, and 
 
 Potential Customers: https://www.wacdl.org/AF_MemberDirectory.asp
 
+Download the Windows Desktop App: https://drive.google.com/file/d/1SUhVitcQJvl9KbBVmc6FRnrbIxK92aeY/view?usp=sharing
+
 ---
 
 ## 🚀 Features

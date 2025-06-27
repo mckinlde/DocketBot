@@ -13,14 +13,18 @@ os.makedirs(TEMP_HTML_DIR, exist_ok=True)
 def lni(driver, ubi):
     # First, use a monster function to open the lni page,
     # perform a search by UBI number,
+    # and save links from the search results to their detail pages
+    detail_page_links = open_lni_and_get_detail_page_links(driver, ubi)
+
+    
     # navigate to each result's detail page,
     # and save each result's detail page as an HTML file
-    contractor_html_list = open_lni_navigate_and_save_results_as_html(driver, ubi)
+    filepaths = save_detail_to_html(driver, detail_page_links)
 
     # Next, create an empty list for holding parsed information from the HTML files
     parsed_details_list = []
     # For each HTML file we saved
-    for detail_path in contractor_html_list:
+    for detail_path in filepaths:
         # Open it
         print(f"📂 Loading {detail_path} from disk")
         with open(detail_path, "r", encoding="utf-8") as detail_file:
@@ -37,14 +41,13 @@ def lni(driver, ubi):
     return parsed_details_list
 
 
-# lni navigation and filesaving
-def open_lni_navigate_and_save_results_as_html(driver, ubi):
+# lni ubi search and detail page link grabbing
+def open_lni_and_get_detail_page_links(driver, ubi):
     print("🌐 Navigating to LNI site...")
     driver.get("https://secure.lni.wa.gov/verify/")
     time.sleep(2)
 
     try:
-        # Wait for and set dropdown to UBI search
         print("⏳ Waiting for search type dropdown...")
         dropdown = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.ID, "selSearchType"))
@@ -52,65 +55,59 @@ def open_lni_navigate_and_save_results_as_html(driver, ubi):
         Select(dropdown).select_by_value("Ubi")
         time.sleep(2)
 
-        # Enter UBI number
         WebDriverWait(driver, 5).until(
             EC.visibility_of_element_located((By.ID, "txtSearchBy"))
         )
         ubi_input = driver.find_element(By.ID, "txtSearchBy")
         ubi_input.send_keys(ubi)
 
-        # Click Search
         search_btn = driver.find_element(By.ID, "searchButton")
         search_btn.click()
         print("🖱️ Clicked Search button")
-        time.sleep(2)  # defensive sleep
+        time.sleep(2)
         print("⌛ Waiting for a div.resultitem to load...")
         WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, "div.resultItem"))
         )
 
-        # Save result list HTML
         print("💾 Saving search results page...")
-        detail_html = driver.page_source
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         html_path = os.path.join(TEMP_HTML_DIR, f"lni_search_results_list_{timestamp}.html")
         with open(html_path, "w", encoding="utf-8") as f:
-            f.write(detail_html)
-        
-        print("🔍 Parsing search results page...")
-        # Save the results list URL for navigating back to
-        list_url = driver.current_url
-        contractor_detail_html_list = []
-        result_divs = driver.find_elements(By.CSS_SELECTOR, "div.resultItem")
-        print(f"📦 Found {len(result_divs)} contractor(s): ")
-        for result_div in result_divs:
-            print(result_div)
-        if not result_divs:
-            print("ℹ️  No LNI contractor results found.")
-            return []
+            f.write(driver.page_source)
+        print(f"✅ Search results page saved to {html_path}")
 
-        # TODO: we may be able to end this function here and return the list of div.resultItems to use as static links
-                
+        soup = BeautifulSoup(driver.page_source, "html.parser")
+        result_divs = soup.select("div.resultItem")
         print(f"🔗 Extracting contractor detail URLs from {len(result_divs)} result items...")
-        for idx, div in enumerate(result_divs):
-            link = div.find("a", href=True)
-            if link:
-                print(f"  #{idx+1}: {link['href']}")
+
+        base_detail_url = "https://secure.lni.wa.gov/verify/Detail.aspx?"
+        detail_urls = []
+        for i, result in enumerate(result_divs, start=1):
+            raw_id = result.get("id")
+            if raw_id:
+                url = base_detail_url + raw_id
+                detail_urls.append(url)
+                print(f"  #{i}: ✅ {url}")
             else:
-                print(f"  #{idx+1}: ❌ No <a> tag found in this resultItem")
-                
-        # Click on the first contractor detail panel (already expanded)
-        for idx in range(len(result_divs)):
+                print(f"  #{i}: ❌ No ID attribute found")
+
+        return detail_urls
+
+    except Exception as e:
+        print(f"🚨 LNI navigation error: {e}")
+        return []
+     
+
+# lni detail page opening and html filesaving
+def save_detail_to_html(driver, detail_urls):
+    contractor_detail_html_list = []
+    try:
+        for idx, url in enumerate(detail_urls):
             try:
                 print(f"\n➡️  Navigating to contractor detail page #{idx + 1}...")
-                if idx >= len(result_divs):
-                    print(f"⚠️  Skipping contractor #{idx + 1}: DOM changed or index out of bounds.")
-                    break
-
-                contractor_elem = result_divs[idx]
-                driver.execute_script("arguments[0].scrollIntoView(true);", contractor_elem)
-                contractor_elem.click()
-                time.sleep(2)  # defensive sleep
+                driver.get(url)
+                time.sleep(2)
 
                 print("⌛ Waiting for a id.layoutContainer to load...")
                 WebDriverWait(driver, 10).until(
@@ -124,29 +121,18 @@ def open_lni_navigate_and_save_results_as_html(driver, ubi):
                     print(f"🪶 Writing detail HTML to: {detail_path}")
                     f.write(html)
                 print(f"✅ Saved contractor detail HTML #{idx + 1} to: {detail_path}")
-                # Extend the list of saved HTMLs
-                contractor_detail_html_list.extend(detail_path)
+
+                contractor_detail_html_list.append(detail_path)
 
             except TimeoutException:
-                print(f"⚠️  Contractor detail page #{idx + 1} failed to load expected content.")
+                print(f"⚠️ Contractor detail page #{idx + 1} failed to load expected content.")
             except (StaleElementReferenceException, WebDriverException) as e:
-                print(f"⚠️  Contractor #{idx + 1} navigation error: {e}")
-            finally:
-                print("🏃‍♂️ Return to results list page") 
-                driver.get(list_url)
-                try:
-                    WebDriverWait(driver, 10).until(
-                        EC.presence_of_element_located((By.CSS_SELECTOR, "div.resultItem"))
-                    )
-                except TimeoutException:
-                    print("⚠️  Could not return to result list from detail page.")
-                    break
-
+                print(f"⚠️ Contractor #{idx + 1} navigation error: {e}")
         return contractor_detail_html_list
 
     except Exception as e:
         print(f"🚨 LNI navigation error: {e}")
-        return {"status": "error"}
+        return []
 
 
 # parse_lni_contractor_html is returning none for everything

@@ -6,8 +6,14 @@
 #     - Name of registered agent, and registered agent mailing and street address
 #     - Governor names
 
-from selenium.webdriver.common.by import By
-from scripts.common import wait_for_continue
+def wait_for_continue(prompt="Press ENTER to continue, or ';' to skip."):
+    resp = input(prompt)
+    if resp.strip() == ";":
+        return False
+    return True
+
+# --- SCRAPERS ---
+# ... [existing imports and config remain unchanged above this line] ...
 
 def get_sos_info(driver, ubi):
     try:
@@ -16,7 +22,7 @@ def get_sos_info(driver, ubi):
         if not wait_for_continue():
             return {"status": "Not found"}
 
-        # TODO: Add actual live scraping
+        # TODO: Add live scraping here — this is from debug HTML for now
         data = {
             "company_name": "OMAK MACHINE SHOP, INC.",
             "ubi": ubi,
@@ -43,3 +49,4 @@ def get_sos_info(driver, ubi):
     except Exception as e:
         print(f"SOS error: {e}")
         return {"status": "error"}
+

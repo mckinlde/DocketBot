@@ -11,23 +11,35 @@ TEMP_HTML_DIR = os.path.join(os.path.dirname(__file__), "..", "temp_html_files")
 os.makedirs(TEMP_HTML_DIR, exist_ok=True)
 
 def lni(driver, ubi):
+    # First, use a monster function to open the lni page,
+    # perform a search by UBI number,
+    # navigate to each result's detail page,
+    # and save each result's detail page as an HTML file
     contractor_html_list = open_lni_navigate_and_save_results_as_html(driver, ubi)
 
+    # Next, create an empty list for holding parsed information from the HTML files
     parsed_details_list = []
+    # For each HTML file we saved
     for detail_path in contractor_html_list:
+        # Open it
         print(f"📂 Loading {detail_path} from disk")
         with open(detail_path, "r", encoding="utf-8") as detail_file:
             list_html = detail_file.read()
-
+        # Try to parse it
         print("🔍 Parsing contractor detail HTML...")
         parsed_details = parse_lni_contractor_html(list_html)
+        # And add it to the parsed_details_list
         if parsed_details:
             print("Extending contractor list")
             parsed_details_list.extend(parsed_details)
 
+    # Finally, return the parsed_details_list
     return parsed_details_list
 
 
+# parse_lni_contractor_html is returning none for everything
+#   e.g.:
+# {'Business Name': None, 'UBI Number': None, 'Contractor Registration Number': None, 'Bonding Company': None, 'Bond Amount': None, 'Bond Number': None, 'Insurance Company': None, 'Insurance Amount': None, 'Status': None, 'Suspended': None, 'Lawsuits': None}
 def parse_lni_contractor_html(html):
     soup = BeautifulSoup(html, "html.parser")
     get = lambda label: soup.find("span", string=label)
@@ -51,8 +63,8 @@ def parse_lni_contractor_html(html):
     return(result)
 
 
-# === lni navigation and filesaving is confirmed working ===
-# === Never change it again ===
+# lni navigation and filesaving is confirmed working
+# Never change it again
 def open_lni_navigate_and_save_results_as_html(driver, ubi):
     print("🌐 Navigating to LNI site...")
     driver.get("https://secure.lni.wa.gov/verify/")

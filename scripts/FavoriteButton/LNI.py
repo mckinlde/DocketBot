@@ -37,34 +37,7 @@ def lni(driver, ubi):
     return parsed_details_list
 
 
-# parse_lni_contractor_html is returning none for everything
-#   e.g.:
-# {'Business Name': None, 'UBI Number': None, 'Contractor Registration Number': None, 'Bonding Company': None, 'Bond Amount': None, 'Bond Number': None, 'Insurance Company': None, 'Insurance Amount': None, 'Status': None, 'Suspended': None, 'Lawsuits': None}
-def parse_lni_contractor_html(html):
-    soup = BeautifulSoup(html, "html.parser")
-    get = lambda label: soup.find("span", string=label)
-    value_after = lambda label: get(label).find_next("span").text.strip() if get(label) else None
-
-    result = {
-        "Business Name": value_after("Business Name:"),
-        "UBI Number": value_after("UBI Number:"),
-        "Contractor Registration Number": value_after("Contractor Registration Number:"),
-        "Bonding Company": value_after("Bonding Company:"),
-        "Bond Amount": value_after("Bond Amount:"),
-        "Bond Number": value_after("Bond Number:"),
-        "Insurance Company": value_after("Insurance Company:"),
-        "Insurance Amount": value_after("Insurance Amount:"),
-        "Status": value_after("Status:"),
-        "Suspended": value_after("Suspended:"),
-        "Lawsuits": value_after("Lawsuits Filed Against Bond:")
-    }
-
-    print(result)
-    return(result)
-
-
-# lni navigation and filesaving is confirmed working
-# Never change it again
+# lni navigation and filesaving
 def open_lni_navigate_and_save_results_as_html(driver, ubi):
     print("🌐 Navigating to LNI site...")
     driver.get("https://secure.lni.wa.gov/verify/")
@@ -166,4 +139,30 @@ def open_lni_navigate_and_save_results_as_html(driver, ubi):
     except Exception as e:
         print(f"🚨 LNI navigation error: {e}")
         return {"status": "error"}
+
+
+# parse_lni_contractor_html is returning none for everything
+#   e.g.:
+# {'Business Name': None, 'UBI Number': None, 'Contractor Registration Number': None, 'Bonding Company': None, 'Bond Amount': None, 'Bond Number': None, 'Insurance Company': None, 'Insurance Amount': None, 'Status': None, 'Suspended': None, 'Lawsuits': None}
+def parse_lni_contractor_html(html):
+    soup = BeautifulSoup(html, "html.parser")
+    get = lambda label: soup.find("span", string=label)
+    value_after = lambda label: get(label).find_next("span").text.strip() if get(label) else None
+
+    result = {
+        "Business Name": value_after("Business Name:"),
+        "UBI Number": value_after("UBI Number:"),
+        "Contractor Registration Number": value_after("Contractor Registration Number:"),
+        "Bonding Company": value_after("Bonding Company:"),
+        "Bond Amount": value_after("Bond Amount:"),
+        "Bond Number": value_after("Bond Number:"),
+        "Insurance Company": value_after("Insurance Company:"),
+        "Insurance Amount": value_after("Insurance Amount:"),
+        "Status": value_after("Status:"),
+        "Suspended": value_after("Suspended:"),
+        "Lawsuits": value_after("Lawsuits Filed Against Bond:")
+    }
+
+    print(result)
+    return(result)
 

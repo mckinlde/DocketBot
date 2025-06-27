@@ -90,7 +90,15 @@ def open_lni_navigate_and_save_results_as_html(driver, ubi):
             return []
 
         # TODO: we may be able to end this function here and return the list of div.resultItems to use as static links
-
+                
+        print(f"🔗 Extracting contractor detail URLs from {len(result_divs)} result items...")
+        for idx, div in enumerate(result_divs):
+            link = div.find("a", href=True)
+            if link:
+                print(f"  #{idx+1}: {link['href']}")
+            else:
+                print(f"  #{idx+1}: ❌ No <a> tag found in this resultItem")
+                
         # Click on the first contractor detail panel (already expanded)
         for idx in range(len(result_divs)):
             try:

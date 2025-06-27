@@ -40,7 +40,6 @@ def lni(driver, ubi):
     # Finally, return the parsed_details_list
     return parsed_details_list
 
-
 # lni ubi search and detail page link grabbing
 def open_lni_and_get_detail_page_links(driver, ubi):
     print("🌐 Navigating to LNI site...")
@@ -98,7 +97,6 @@ def open_lni_and_get_detail_page_links(driver, ubi):
         print(f"🚨 LNI navigation error: {e}")
         return []
      
-
 # lni detail page opening and html filesaving
 def save_detail_to_html(driver, detail_urls):
     contractor_detail_html_list = []
@@ -134,29 +132,37 @@ def save_detail_to_html(driver, detail_urls):
         print(f"🚨 LNI navigation error: {e}")
         return []
 
-
-# parse_lni_contractor_html is returning none for everything
+# parse_lni_contractor_html into a JSON-formatted string
 #   e.g.:
 # {'Business Name': None, 'UBI Number': None, 'Contractor Registration Number': None, 'Bonding Company': None, 'Bond Amount': None, 'Bond Number': None, 'Insurance Company': None, 'Insurance Amount': None, 'Status': None, 'Suspended': None, 'Lawsuits': None}
 def parse_lni_contractor_html(html):
     soup = BeautifulSoup(html, "html.parser")
-    get = lambda label: soup.find("span", string=label)
-    value_after = lambda label: get(label).find_next("span").text.strip() if get(label) else None
 
-    result = {
-        "Business Name": value_after("Business Name:"),
-        "UBI Number": value_after("UBI Number:"),
-        "Contractor Registration Number": value_after("Contractor Registration Number:"),
-        "Bonding Company": value_after("Bonding Company:"),
-        "Bond Amount": value_after("Bond Amount:"),
-        "Bond Number": value_after("Bond Number:"),
-        "Insurance Company": value_after("Insurance Company:"),
-        "Insurance Amount": value_after("Insurance Amount:"),
-        "Status": value_after("Status:"),
-        "Suspended": value_after("Suspended:"),
-        "Lawsuits": value_after("Lawsuits Filed Against Bond:")
+    def extract_by_id(id_):
+        tag = soup.find(id=id_)
+        return tag.get_text(strip=True) if tag else None
+
+    def extract_multiple_bond_lawsuit_rows(section_id):
+        section = soup.find(id=section_id)
+        results = []
+        if section:
+            rows = section.find_all("div", class_="bondRow")
+            for row in rows:
+                results.append(" ".join(row.stripped_strings))
+        return results or None
+    
+    result =  {
+        "Business Name": extract_by_id("BusinessName"),
+        "UBI Number": extract_by_id("UBINumber"),
+        "Contractor Registration Number": extract_by_id("RegistrationNumber"),
+        "Bonding Company": extract_by_id("BondingCompany"),
+        "Bond Amount": extract_by_id("BondAmount"),
+        "Bond Number": extract_by_id("BondNumber"),
+        "Insurance Company": extract_by_id("InsuranceCompany"),
+        "Insurance Amount": extract_by_id("InsuranceAmount"),
+        "Status": extract_by_id("Status"),
+        "Suspended": extract_by_id("Suspended"),
+        "Lawsuits": extract_multiple_bond_lawsuit_rows("lawsuitsContainer"),
     }
-
     print(result)
     return(result)
-

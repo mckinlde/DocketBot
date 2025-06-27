@@ -49,14 +49,12 @@ if __name__ == "__main__":
 
     driver = create_driver()
     try:
-        contractors = lni(driver, ubi)
+        lni_details = lni(driver, ubi)
 
-        print("📑 Final scraped contractors:")
-        for contractor in contractors:
+        print("📑 Final LNI details:")
+        for contractor in lni_details:
             try:
-                for key, val in contractor.items():
-                    print(f"  {key}: {val}")
-                print()
+                print(contractor)
             except Exception as e:
                 print(e)
     finally:
